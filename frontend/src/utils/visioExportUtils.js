@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+
 import {
   createSafeFilename,
   downloadBlob,
@@ -406,6 +406,8 @@ const exportProcessModelForVisio = async (processModel) => {
       "A valid process model with process steps is required for Visio export."
     );
   }
+
+  const { default: ExcelJS } = await import("exceljs");
 
   const workbook = new ExcelJS.Workbook();
 
