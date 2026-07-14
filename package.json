@@ -1,0 +1,12 @@
+{
+  "name": "requirements-flow-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:backend": "npm --prefix backend test",
+    "test:frontend": "npm --prefix frontend test",
+    "lint:frontend": "npm --prefix frontend run lint",
+    "build:frontend": "npm --prefix frontend run build",
+    "verify": "npm run test:backend && npm run test:frontend && npm run lint:frontend && npm run build:frontend"
+  }
+}
