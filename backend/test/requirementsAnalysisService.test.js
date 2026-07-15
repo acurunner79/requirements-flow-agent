@@ -304,6 +304,10 @@ test(
     let providerCallCount = 0;
     let responseProcessorCallCount = 0;
 
+    const warningLogs = [];
+    const infoLogs = [];
+    const errorLogs = [];
+
     const createProcessModel =
       createAiProcessModelFactory({
         promptBuilder: () =>
@@ -367,6 +371,28 @@ test(
 
           return correctedProcessModel;
         },
+        logger: {
+          warn: (message, details) => {
+            warningLogs.push({
+              message,
+              details,
+            });
+          },
+
+          info: (message, details) => {
+            infoLogs.push({
+              message,
+              details,
+            });
+          },
+
+          error: (message, details) => {
+            errorLogs.push({
+              message,
+              details,
+            });
+          },
+        },
       });
 
     const result =
@@ -388,15 +414,61 @@ test(
       responseProcessorCallCount,
       2
     );
+
+    /**
+     * Confirms that the retry-started event records only controlled diagnostic
+     * information.
+     */
+    assert.deepEqual(
+      warningLogs,
+      [
+        {
+          message:
+            "AI process response required corrective retry.",
+          details: {
+            event:
+              "ai_process_correction_started",
+            errorName: "Error",
+            errorMessage:
+              "The AI provider returned invalid JSON for the process model.",
+          },
+        },
+      ]
+    );
+
+    /**
+     * Confirms that successful recovery produces one completion event.
+     */
+    assert.deepEqual(
+      infoLogs,
+      [
+        {
+          message:
+            "AI process response recovered after corrective retry.",
+          details: {
+            event:
+              "ai_process_correction_succeeded",
+          },
+        },
+      ]
+    );
+
+    /**
+     * A successful recovery must not produce a corrective-failure event.
+     */
+    assert.deepEqual(
+      errorLogs,
+      []
+    );
   }
 );
 
 /**
- * Confirms that response-processing failures also propagate unchanged.
+ * Confirms that a second response-processing failure is logged and propagated
+ * unchanged after exactly one corrective attempt.
  *
- * This protects JSON parsing and normalization errors so the controller can
- * return a consistent failure response while retaining the original diagnostic
- * message server-side.
+ * This protects JSON parsing and normalization diagnostics while preventing an
+ * unbounded retry loop.
  */
 test(
   "propagates response-processing failures after one corrective retry",
@@ -413,6 +485,10 @@ test(
     ];
 
     let providerCallCount = 0;
+
+    const warningLogs = [];
+    const infoLogs = [];
+    const errorLogs = [];
 
     const createProcessModel =
       createAiProcessModelFactory({
@@ -468,7 +544,30 @@ test(
             "The AI provider returned invalid JSON for the process model."
           );
         },
+        logger: {
+          warn: (message, details) => {
+            warningLogs.push({
+              message,
+              details,
+            });
+          },
+
+          info: (message, details) => {
+            infoLogs.push({
+              message,
+              details,
+            });
+          },
+
+          error: (message, details) => {
+            errorLogs.push({
+              message,
+              details,
+            });
+          },
+        },
       });
+ 
 
     await assert.rejects(
       () =>
@@ -484,6 +583,54 @@ test(
     assert.equal(
       providerCallCount,
       2
+    );
+    /**
+     * Confirms that the initial processing failure starts one corrective retry.
+     */
+    assert.deepEqual(
+      warningLogs,
+      [
+        {
+          message:
+            "AI process response required corrective retry.",
+          details: {
+            event:
+              "ai_process_correction_started",
+            errorName: "Error",
+            errorMessage:
+              "The AI provider returned invalid JSON for the process model.",
+          },
+        },
+      ]
+    );
+
+    /**
+     * A failed correction must not produce a success event.
+     */
+    assert.deepEqual(
+      infoLogs,
+      []
+    );
+
+    /**
+     * Confirms that the final processing failure is recorded once before being
+     * propagated to the caller.
+     */
+    assert.deepEqual(
+      errorLogs,
+      [
+        {
+          message:
+            "AI process corrective retry failed.",
+          details: {
+            event:
+              "ai_process_correction_failed",
+            errorName: "Error",
+            errorMessage:
+              "The AI provider returned invalid JSON for the process model.",
+          },
+        },
+      ]
     );
   }
 );

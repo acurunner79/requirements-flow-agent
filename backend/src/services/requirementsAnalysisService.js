@@ -131,11 +131,12 @@ const createMockProcessModel = (requirements) => {
  * dependencies.
  *
  * Dependency injection allows automated tests to verify prompt construction,
- * provider invocation, response normalization, and error propagation without
- * loading a live provider adapter or consuming API tokens.
+ * provider invocation, response normalization, corrective retry behavior, and
+ * structured logging without loading a live provider adapter or consuming API
+ * tokens.
  *
- * Production continues using the real prompt builder, configured provider
- * service, and response normalizer.
+ * Production continues using the real prompt builders, configured provider
+ * service, response normalizer, and server console logger.
  *
  * @param {object} dependencies
  * AI workflow dependencies.
@@ -143,22 +144,44 @@ const createMockProcessModel = (requirements) => {
  * @param {(requirements: string) => string} dependencies.promptBuilder
  * Function that converts requirements into a provider-neutral prompt.
  *
+ * @param {
+ *   (
+ *     originalPrompt: string,
+ *     invalidResponse: string,
+ *     processingError: unknown
+ *   ) => string
+ * } dependencies.correctionPromptBuilder
+ * Function that creates one corrective prompt after response processing fails.
+ *
  * @param {(prompt: string) => Promise<string>} dependencies.providerAnalyzer
- * Function that submits the prompt and returns the raw provider response.
+ * Function that submits a prompt and returns the raw provider response.
  *
  * @param {(responseText: string) => object} dependencies.responseProcessor
- * Function that parses and normalizes the raw provider response.
+ * Function that parses and normalizes a raw provider response.
+ *
+ * @param {object} [dependencies.logger=console]
+ * Structured logger used for corrective-retry observability.
+ *
+ * @param {(message: string, details?: object) => void} dependencies.logger.warn
+ * Records when a corrective retry is triggered.
+ *
+ * @param {(message: string, details?: object) => void} dependencies.logger.info
+ * Records successful corrective recovery.
+ *
+ * @param {(message: string, details?: object) => void} dependencies.logger.error
+ * Records a failed corrective attempt.
  *
  * @returns {(requirements: string) => Promise<object>}
  * Configured AI process-analysis function.
  */
 const createAiProcessModelFactory = ({
   promptBuilder,
-  correctionPromptBuilder, // new dependency
+  correctionPromptBuilder,
   providerAnalyzer,
   responseProcessor,
+  logger = console,
 }) => {
-    return async (requirements) => {
+  return async (requirements) => {
     /**
      * Build the complete provider-neutral prompt from the validated business
      * requirements.
@@ -186,6 +209,27 @@ const createAiProcessModelFactory = ({
       return responseProcessor(rawProviderResponse);
     } catch (processingError) {
       /**
+       * Record only the controlled validation failure category.
+       *
+       * Requirements, prompts, and raw provider responses are intentionally
+       * excluded from logs.
+       */
+      logger.warn(
+        "AI process response required corrective retry.",
+        {
+          event: "ai_process_correction_started",
+          errorName:
+            processingError instanceof Error
+              ? processingError.name
+              : "UnknownError",
+          errorMessage:
+            processingError instanceof Error
+              ? processingError.message
+              : "Unknown response-processing failure.",
+        }
+      );
+
+      /**
        * Build one corrective prompt containing the validation failure and the
        * invalid provider response.
        */
@@ -196,21 +240,60 @@ const createAiProcessModelFactory = ({
           processingError
         );
 
-      /**
-       * Submit exactly one corrective request.
-       *
-       * Any provider or response-processing failure from this second attempt is
-       * allowed to propagate so the workflow cannot enter an unbounded retry
-       * loop.
-       */
-      const correctedProviderResponse =
-        await providerAnalyzer(
-          correctionPrompt
+      try {
+        /**
+         * Submit exactly one corrective request.
+         *
+         * The workflow never performs a third provider request.
+         */
+        const correctedProviderResponse =
+          await providerAnalyzer(
+            correctionPrompt
+          );
+
+        /**
+         * Process the corrected response using the same application contract
+         * enforced during the original attempt.
+         */
+        const correctedProcessModel =
+          responseProcessor(
+            correctedProviderResponse
+          );
+
+        logger.info(
+          "AI process response recovered after corrective retry.",
+          {
+            event: "ai_process_correction_succeeded",
+          }
         );
 
-      return responseProcessor(
-        correctedProviderResponse
-      );
+        return correctedProcessModel;
+      } catch (correctionError) {
+        /**
+         * Record the failed recovery without exposing requirements, prompts, or
+         * raw provider output.
+         */
+        logger.error(
+          "AI process corrective retry failed.",
+          {
+            event: "ai_process_correction_failed",
+            errorName:
+              correctionError instanceof Error
+                ? correctionError.name
+                : "UnknownError",
+            errorMessage:
+              correctionError instanceof Error
+                ? correctionError.message
+                : "Unknown corrective-retry failure.",
+          }
+        );
+
+        /**
+         * Preserve the final provider or response-processing error for the
+         * existing controller error path.
+         */
+        throw correctionError;
+      }
     }
   };
 };
