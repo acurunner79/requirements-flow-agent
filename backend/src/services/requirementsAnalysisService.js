@@ -7,6 +7,7 @@ const {
 } = require("./aiProviderService");
 const {
   buildProcessAnalysisPrompt,
+  buildProcessCorrectionPrompt,
 } = require("../utils/processPromptUtils");
 const {
   processAiResponse,
@@ -153,10 +154,11 @@ const createMockProcessModel = (requirements) => {
  */
 const createAiProcessModelFactory = ({
   promptBuilder,
+  correctionPromptBuilder, // new dependency
   providerAnalyzer,
   responseProcessor,
 }) => {
-  return async (requirements) => {
+    return async (requirements) => {
     /**
      * Build the complete provider-neutral prompt from the validated business
      * requirements.
@@ -165,17 +167,51 @@ const createAiProcessModelFactory = ({
       promptBuilder(requirements);
 
     /**
-     * Submit the generated prompt through the configured provider boundary.
+     * Submit the original prompt through the configured provider boundary.
+     *
+     * Provider failures are intentionally allowed to propagate. A corrective
+     * retry is reserved only for responses that were returned successfully but
+     * failed parsing or structural validation.
      */
     const rawProviderResponse =
       await providerAnalyzer(
         processAnalysisPrompt
       );
 
-    /**
-     * Convert the raw provider output into the standard application contract.
-     */
-    return responseProcessor(rawProviderResponse);
+    try {
+      /**
+       * Attempt to convert the first provider response into the application
+       * process-model contract.
+       */
+      return responseProcessor(rawProviderResponse);
+    } catch (processingError) {
+      /**
+       * Build one corrective prompt containing the validation failure and the
+       * invalid provider response.
+       */
+      const correctionPrompt =
+        correctionPromptBuilder(
+          processAnalysisPrompt,
+          rawProviderResponse,
+          processingError
+        );
+
+      /**
+       * Submit exactly one corrective request.
+       *
+       * Any provider or response-processing failure from this second attempt is
+       * allowed to propagate so the workflow cannot enter an unbounded retry
+       * loop.
+       */
+      const correctedProviderResponse =
+        await providerAnalyzer(
+          correctionPrompt
+        );
+
+      return responseProcessor(
+        correctedProviderResponse
+      );
+    }
   };
 };
 
@@ -189,6 +225,8 @@ const createAiProcessModelFactory = ({
 const createAiProcessModel =
   createAiProcessModelFactory({
     promptBuilder: buildProcessAnalysisPrompt,
+    correctionPromptBuilder:
+      buildProcessCorrectionPrompt,
     providerAnalyzer: analyzeWithConfiguredProvider,
     responseProcessor: processAiResponse,
   });

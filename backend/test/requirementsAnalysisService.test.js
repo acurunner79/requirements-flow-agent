@@ -244,6 +244,153 @@ test("propagates provider failures from the AI workflow", async () => {
   );
 });
 
+// ========================================
+// AI Corrective Retry Recovery Tests
+// ========================================
+
+/**
+ * Confirms that the first invalid provider response triggers exactly one
+ * corrective request.
+ */
+
+/**
+ * Confirms that the corrected response is processed and returned successfully.
+ */
+
+/**
+ * Confirms that both the provider and response processor run exactly twice.
+ */
+test(
+  "returns a corrected process model after one response-processing failure",
+  async () => {
+    const originalPrompt =
+      "Original process-analysis prompt";
+
+    const correctionPrompt =
+      "Corrective process-analysis prompt";
+
+    const correctedProcessModel = {
+      processName: "Recovered Process",
+      actors: ["Operations"],
+      steps: [
+        {
+          id: "STEP-001",
+          type: "start",
+          label: "Begin",
+          owner: "Operations",
+          connections: [
+            {
+              targetStepId: "STEP-002",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "STEP-002",
+          type: "end",
+          label: "Complete",
+          owner: "Operations",
+          connections: [],
+        },
+      ],
+      warnings: [],
+    };
+
+    const providerResponses = [
+      "invalid provider response",
+      "corrected provider response",
+    ];
+
+    let providerCallCount = 0;
+    let responseProcessorCallCount = 0;
+
+    const createProcessModel =
+      createAiProcessModelFactory({
+        promptBuilder: () =>
+          originalPrompt,
+
+        correctionPromptBuilder: (
+          receivedOriginalPrompt,
+          invalidResponse,
+          processingError
+        ) => {
+          assert.equal(
+            receivedOriginalPrompt,
+            originalPrompt
+          );
+
+          assert.equal(
+            invalidResponse,
+            providerResponses[0]
+          );
+
+          assert.equal(
+            processingError.message,
+            "The AI provider returned invalid JSON for the process model."
+          );
+
+          return correctionPrompt;
+        },
+
+        providerAnalyzer: async (prompt) => {
+          if (providerCallCount === 0) {
+            assert.equal(
+              prompt,
+              originalPrompt
+            );
+          } else {
+            assert.equal(
+              prompt,
+              correctionPrompt
+            );
+          }
+
+          const response =
+            providerResponses[providerCallCount];
+
+          providerCallCount += 1;
+
+          return response;
+        },
+
+        responseProcessor: (responseText) => {
+          responseProcessorCallCount += 1;
+
+          if (
+            responseText ===
+            providerResponses[0]
+          ) {
+            throw new Error(
+              "The AI provider returned invalid JSON for the process model."
+            );
+          }
+
+          return correctedProcessModel;
+        },
+      });
+
+    const result =
+      await createProcessModel(
+        "Analyze this process."
+      );
+
+    assert.deepEqual(
+      result,
+      correctedProcessModel
+    );
+
+    assert.equal(
+      providerCallCount,
+      2
+    );
+
+    assert.equal(
+      responseProcessorCallCount,
+      2
+    );
+  }
+);
+
 /**
  * Confirms that response-processing failures also propagate unchanged.
  *
@@ -251,29 +398,92 @@ test("propagates provider failures from the AI workflow", async () => {
  * return a consistent failure response while retaining the original diagnostic
  * message server-side.
  */
-test("propagates response-processing failures from the AI workflow", async () => {
-  const analyzeWithInjectedWorkflow =
-    createAiProcessModelFactory({
-      promptBuilder: () => "Generated prompt",
+test(
+  "propagates response-processing failures after one corrective retry",
+  async () => {
+    const processAnalysisPrompt =
+      "Original process-analysis prompt";
 
-      providerAnalyzer: async () =>
-        "invalid provider response",
+    const correctionPrompt =
+      "Corrective process-analysis prompt";
 
-      responseProcessor: () => {
-        throw new Error(
-          "The AI provider returned invalid JSON for the process model."
-        );
-      },
-    });
+    const providerResponses = [
+      "invalid response",
+      "still invalid response",
+    ];
 
-  await assert.rejects(
-    () =>
-      analyzeWithInjectedWorkflow(
-        "Review refund requests."
-      ),
-    {
-      message:
-        "The AI provider returned invalid JSON for the process model.",
-    }
-  );
-});
+    let providerCallCount = 0;
+
+    const createProcessModel =
+      createAiProcessModelFactory({
+        promptBuilder: () =>
+          processAnalysisPrompt,
+
+        correctionPromptBuilder: (
+          originalPrompt,
+          invalidResponse,
+          processingError
+        ) => {
+          assert.equal(
+            originalPrompt,
+            processAnalysisPrompt
+          );
+
+          assert.equal(
+            invalidResponse,
+            providerResponses[0]
+          );
+
+          assert.equal(
+            processingError.message,
+            "The AI provider returned invalid JSON for the process model."
+          );
+
+          return correctionPrompt;
+        },
+
+        providerAnalyzer: async (prompt) => {
+          if (providerCallCount === 0) {
+            assert.equal(
+              prompt,
+              processAnalysisPrompt
+            );
+          } else {
+            assert.equal(
+              prompt,
+              correctionPrompt
+            );
+          }
+
+          const response =
+            providerResponses[providerCallCount];
+
+          providerCallCount += 1;
+
+          return response;
+        },
+
+        responseProcessor: () => {
+          throw new Error(
+            "The AI provider returned invalid JSON for the process model."
+          );
+        },
+      });
+
+    await assert.rejects(
+      () =>
+        createProcessModel(
+          "Analyze this process."
+        ),
+      {
+        message:
+          "The AI provider returned invalid JSON for the process model.",
+      }
+    );
+
+    assert.equal(
+      providerCallCount,
+      2
+    );
+  }
+);

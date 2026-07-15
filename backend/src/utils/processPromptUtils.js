@@ -227,8 +227,104 @@ ${normalizedRequirements}
 `.trim();
 };
 
+// ========================================
+// Process Analysis Correction Prompt
+// ========================================
+
+/**
+ * Builds a corrective prompt when an AI provider returns malformed or
+ * structurally invalid process-model output.
+ *
+ * The correction request includes:
+ * - The original analysis instructions
+ * - The provider's invalid response
+ * - The validation error produced by the backend
+ *
+ * This gives the provider one opportunity to repair its response without
+ * changing or reinterpreting the original business requirements.
+ *
+ * @param {string} originalPrompt
+ * Original process-analysis prompt submitted to the provider.
+ *
+ * @param {string} invalidResponse
+ * Raw provider response that failed parsing or structural validation.
+ *
+ * @param {unknown} processingError
+ * Error raised while parsing or normalizing the provider response.
+ *
+ * @returns {string}
+ * Provider-neutral corrective prompt.
+ *
+ * @throws {Error}
+ * Throws when the original prompt or invalid response is missing.
+ */
+const buildProcessCorrectionPrompt = (
+  originalPrompt,
+  invalidResponse,
+  processingError
+) => {
+  if (
+    typeof originalPrompt !== "string" ||
+    !originalPrompt.trim()
+  ) {
+    throw new Error(
+      "The original process-analysis prompt is required to build a correction prompt."
+    );
+  }
+
+  if (
+    typeof invalidResponse !== "string" ||
+    !invalidResponse.trim()
+  ) {
+    throw new Error(
+      "The invalid provider response is required to build a correction prompt."
+    );
+  }
+
+  const normalizedErrorMessage =
+    processingError instanceof Error &&
+    processingError.message.trim()
+      ? processingError.message.trim()
+      : "The response failed process-model validation.";
+
+  return `
+The previous response did not satisfy the required process-model contract.
+
+Correct the response using the original instructions below.
+
+CORRECTION RULES
+
+1. Return one complete corrected JSON object.
+2. Return JSON only.
+3. Do not include Markdown or code fences.
+4. Do not include commentary before or after the JSON.
+5. Preserve the original business requirements and intended process meaning.
+6. Correct only formatting, schema, identifier, connection, and workflow
+   structure problems.
+7. Use exactly one start step.
+8. Include at least one end step.
+9. Use unique process-step identifiers.
+10. Ensure every connection target references an existing process-step ID.
+11. End steps must have empty connections arrays.
+12. Do not return the legacy nextStepIds property.
+
+VALIDATION FAILURE
+
+${normalizedErrorMessage}
+
+ORIGINAL ANALYSIS INSTRUCTIONS
+
+${originalPrompt.trim()}
+
+INVALID RESPONSE TO CORRECT
+
+${invalidResponse.trim()}
+`.trim();
+};
+
 module.exports = {
   PROCESS_MODEL_RESPONSE_EXAMPLE,
+  buildProcessCorrectionPrompt,
   SUPPORTED_PROCESS_STEP_TYPES,
   buildProcessAnalysisPrompt,
 };
