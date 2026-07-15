@@ -389,6 +389,77 @@ test("rejects responses with no usable process steps", () => {
 });
 
 // ========================================
+// Normalized Process Structure Validation
+// ========================================
+
+test("rejects duplicate process step IDs", () => {
+  assert.throws(
+    () =>
+      normalizeProcessModelResponse({
+        processName: "Duplicate Step Process",
+        actors: ["Operations"],
+        steps: [
+          {
+            id: "STEP-001",
+            type: "start",
+            label: "Begin",
+            owner: "Operations",
+            connections: [],
+          },
+          {
+            id: "STEP-001",
+            type: "end",
+            label: "Complete",
+            owner: "Operations",
+            connections: [],
+          },
+        ],
+        warnings: [],
+      }),
+    {
+      message:
+        "The AI provider returned duplicate process-step ID: STEP-001.",
+    }
+  );
+});
+
+test("rejects connections to unknown process step IDs", () => {
+  assert.throws(
+    () =>
+      normalizeProcessModelResponse({
+        processName: "Dangling Connection Process",
+        actors: ["Operations"],
+        steps: [
+          {
+            id: "STEP-001",
+            type: "start",
+            label: "Begin",
+            owner: "Operations",
+            connections: [
+              {
+                targetStepId: "STEP-999",
+                label: "",
+              },
+            ],
+          },
+          {
+            id: "STEP-002",
+            type: "end",
+            label: "Complete",
+            owner: "Operations",
+            connections: [],
+          },
+        ],
+        warnings: [],
+      }),
+    {
+      message:
+        "The AI provider returned a connection from STEP-001 to unknown process-step ID: STEP-999.",
+    }
+  );
+});
+
+// ========================================
 // Raw Provider Response Parsing Tests
 // ========================================
 
@@ -706,7 +777,7 @@ test("creates deterministic fallback IDs for missing process step IDs", () => {
         owner: "Operations",
         connections: [
           {
-            targetStepId: "STEP-003",
+            targetStepId: "CUSTOM-END",
             label: "",
           },
         ],
@@ -716,7 +787,6 @@ test("creates deterministic fallback IDs for missing process step IDs", () => {
         type: "end",
         label: "Process completed",
         owner: "Operations",
-        connections: [],
       },
     ],
     warnings: [],

@@ -587,6 +587,54 @@ const normalizeWarnings = (warnings) => {
 };
 
 // ========================================
+// Normalized Process Structure Validation
+// ========================================
+
+/**
+ * Validates structural relationships that must remain unambiguous throughout
+ * process editing and export.
+ *
+ * Human-review concerns such as missing owners, generic labels, or incomplete
+ * workflow semantics remain available to the frontend validation layer.
+ *
+ * This helper rejects only structural defects that cannot be represented
+ * reliably:
+ * - Duplicate process-step identifiers
+ * - Connections targeting process steps that do not exist
+ *
+ * @param {Array<object>} steps
+ * Normalized process-step collection.
+ *
+ * @returns {void}
+ *
+ * @throws {Error}
+ * Throws when identifiers or connection targets are structurally invalid.
+ */
+const validateNormalizedProcessSteps = (steps) => {
+  const encounteredStepIds = new Set();
+
+  steps.forEach((step) => {
+    if (encounteredStepIds.has(step.id)) {
+      throw new Error(
+        `The AI provider returned duplicate process-step ID: ${step.id}.`
+      );
+    }
+
+    encounteredStepIds.add(step.id);
+  });
+
+  steps.forEach((step) => {
+    step.connections.forEach((connection) => {
+      if (!encounteredStepIds.has(connection.targetStepId)) {
+        throw new Error(
+          `The AI provider returned a connection from ${step.id} to unknown process-step ID: ${connection.targetStepId}.`
+        );
+      }
+    });
+  });
+};
+
+// ========================================
 // Complete Process Model Normalization
 // ========================================
 
@@ -630,6 +678,12 @@ const normalizeProcessModelResponse = (parsedResponse) => {
       "The AI provider response did not contain any usable process steps."
     );
   }
+
+    /**
+   * Reject ambiguous identifiers and dangling connections before the model is
+   * returned to the application.
+   */
+  validateNormalizedProcessSteps(normalizedSteps);
 
   const normalizedActors = normalizeActors(
     parsedResponse.actors
@@ -707,4 +761,5 @@ module.exports = {
   processAiResponse,
   removeMarkdownCodeFences,
   resolveProcessStepConnections,
+  validateNormalizedProcessSteps,
 };
