@@ -38,6 +38,22 @@ const configuredMaxOutputTokens =
       )
     : 6000;
 
+const configuredTimeoutMs =
+  process.env.OPENAI_TIMEOUT_MS
+    ? Number.parseInt(
+        process.env.OPENAI_TIMEOUT_MS,
+        10
+      )
+    : 60_000;
+
+const configuredMaxRetries =
+  process.env.OPENAI_MAX_RETRIES
+    ? Number.parseInt(
+        process.env.OPENAI_MAX_RETRIES,
+        10
+      )
+    : 2;
+
 // ========================================
 // OpenAI Configuration Validation
 // ========================================
@@ -76,6 +92,24 @@ const validateOpenAiConfiguration = () => {
       "OPENAI_MAX_OUTPUT_TOKENS must be a positive integer."
     );
   }
+
+  if (
+    !Number.isInteger(configuredTimeoutMs) ||
+    configuredTimeoutMs <= 0
+  ) {
+    throw new Error(
+      "OPENAI_TIMEOUT_MS must be a positive integer."
+    );
+  }
+
+  if (
+    !Number.isInteger(configuredMaxRetries) ||
+    configuredMaxRetries < 0
+  ) {
+    throw new Error(
+      "OPENAI_MAX_RETRIES must be a non-negative integer."
+    );
+  }
 };
 
 // ========================================
@@ -98,6 +132,8 @@ const createOpenAiClient = () => {
 
   return new OpenAI({
     apiKey: configuredApiKey,
+    timeout: configuredTimeoutMs,
+    maxRetries: configuredMaxRetries,
   });
 };
 
