@@ -183,7 +183,7 @@ test("prefers rich connections over legacy nextStepIds", () => {
     steps: [
       {
         id: "STEP-001",
-        type: "decision",
+        type: "start",
         label: "Choose a route",
         owner: "Operations",
         connections: [
@@ -261,10 +261,15 @@ test("removes outgoing connections from end steps", () => {
       },
       {
         id: "STEP-002",
-        type: "process",
-        label: "Unused step",
+        type: "start",
+        label: "Process started",
         owner: "Operations",
-        connections: [],
+        connections: [
+          {
+            targetStepId: "STEP-001",
+            label: "",
+          },
+        ],
       },
       {
         id: "STEP-003",
@@ -304,7 +309,7 @@ test("removes invalid and duplicate rich connections", () => {
     steps: [
       {
         id: "STEP-001",
-        type: "decision",
+        type: "start",
         label: "Select a route",
         owner: "Operations",
         connections: [
@@ -455,6 +460,126 @@ test("rejects connections to unknown process step IDs", () => {
     {
       message:
         "The AI provider returned a connection from STEP-001 to unknown process-step ID: STEP-999.",
+    }
+  );
+});
+
+test("rejects process models without a start step", () => {
+  assert.throws(
+    () =>
+      normalizeProcessModelResponse({
+        processName: "Missing Start Process",
+        actors: ["Operations"],
+        steps: [
+          {
+            id: "STEP-001",
+            type: "process",
+            label: "Review request",
+            owner: "Operations",
+            connections: [
+              {
+                targetStepId: "STEP-002",
+                label: "",
+              },
+            ],
+          },
+          {
+            id: "STEP-002",
+            type: "end",
+            label: "Complete process",
+            owner: "Operations",
+            connections: [],
+          },
+        ],
+        warnings: [],
+      }),
+    {
+      message:
+        "The AI provider response must contain one start process step.",
+    }
+  );
+});
+
+test("rejects process models with multiple start steps", () => {
+  assert.throws(
+    () =>
+      normalizeProcessModelResponse({
+        processName: "Multiple Start Process",
+        actors: ["Operations"],
+        steps: [
+          {
+            id: "STEP-001",
+            type: "start",
+            label: "First start",
+            owner: "Operations",
+            connections: [
+              {
+                targetStepId: "STEP-003",
+                label: "",
+              },
+            ],
+          },
+          {
+            id: "STEP-002",
+            type: "start",
+            label: "Second start",
+            owner: "Operations",
+            connections: [
+              {
+                targetStepId: "STEP-003",
+                label: "",
+              },
+            ],
+          },
+          {
+            id: "STEP-003",
+            type: "end",
+            label: "Complete process",
+            owner: "Operations",
+            connections: [],
+          },
+        ],
+        warnings: [],
+      }),
+    {
+      message:
+        "The AI provider response must not contain multiple start process steps.",
+    }
+  );
+});
+
+test("rejects process models without an end step", () => {
+  assert.throws(
+    () =>
+      normalizeProcessModelResponse({
+        processName: "Missing End Process",
+        actors: ["Operations"],
+        steps: [
+          {
+            id: "STEP-001",
+            type: "start",
+            label: "Begin",
+            owner: "Operations",
+            connections: [
+              {
+                targetStepId: "STEP-002",
+                label: "",
+              },
+            ],
+          },
+          {
+            id: "STEP-002",
+            type: "process",
+            label: "Continue processing",
+            owner: "Operations",
+            connections: [],
+          },
+        ],
+        warnings: [],
+      }),
+    {
+      message:
+        "The AI provider response must contain at least one end process step.",
     }
   );
 });
@@ -699,8 +824,8 @@ test("normalizes missing and unsupported step types to process", () => {
     steps: [
       {
         id: "STEP-001",
-        type: "",
-        label: "First step",
+        type: "start",
+        label: "Process started",
         owner: "Operations",
         connections: [
           {
@@ -711,8 +836,8 @@ test("normalizes missing and unsupported step types to process", () => {
       },
       {
         id: "STEP-002",
-        type: "approval_gate",
-        label: "Second step",
+        type: "",
+        label: "First step",
         owner: "Operations",
         connections: [
           {
@@ -723,6 +848,18 @@ test("normalizes missing and unsupported step types to process", () => {
       },
       {
         id: "STEP-003",
+        type: "approval_gate",
+        label: "Second step",
+        owner: "Operations",
+        connections: [
+          {
+            targetStepId: "STEP-004",
+            label: "",
+          },
+        ],
+      },
+      {
+        id: "STEP-004",
         type: "END",
         label: "Process completed",
         owner: "Operations",
@@ -733,17 +870,17 @@ test("normalizes missing and unsupported step types to process", () => {
   });
 
   assert.equal(
-    normalizedModel.steps[0].type,
-    "process"
-  );
-
-  assert.equal(
     normalizedModel.steps[1].type,
     "process"
   );
 
   assert.equal(
     normalizedModel.steps[2].type,
+    "process"
+  );
+
+  assert.equal(
+    normalizedModel.steps[3].type,
     "end"
   );
 });
@@ -821,6 +958,18 @@ test("normalizes string and structured provider warnings", () => {
     steps: [
       {
         id: "STEP-001",
+        type: "start",
+        label: "Process started",
+        owner: "Operations",
+        connections: [
+          {
+            targetStepId: "STEP-002",
+            label: "",
+          },
+        ],
+      },
+      {
+        id: "STEP-002",
         type: "end",
         label: "Process completed",
         owner: "Operations",

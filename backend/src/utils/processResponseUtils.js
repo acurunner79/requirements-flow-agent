@@ -632,6 +632,41 @@ const validateNormalizedProcessSteps = (steps) => {
       }
     });
   });
+
+    /**
+   * Ensure the process has one unambiguous entry point.
+   */
+  const startSteps = steps.filter(
+    (step) => step.type === "start"
+  );
+
+  if (startSteps.length === 0) {
+    throw new Error(
+      "The AI provider response must contain one start process step."
+    );
+  }
+
+  if (startSteps.length > 1) {
+    throw new Error(
+      "The AI provider response must not contain multiple start process steps."
+    );
+  }
+
+  /**
+   * Ensure the process contains at least one terminal outcome.
+   *
+   * Multiple end steps are valid because decision branches may conclude with
+   * different business outcomes.
+   */
+  const containsEndStep = steps.some(
+    (step) => step.type === "end"
+  );
+
+  if (!containsEndStep) {
+    throw new Error(
+      "The AI provider response must contain at least one end process step."
+    );
+  }
 };
 
 // ========================================
