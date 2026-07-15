@@ -1,11 +1,68 @@
-import { describe, expect, test } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
+
+import ExcelJS from "exceljs";
+
+// ========================================
+// Visio Workbook Download Mock
+// ========================================
+
+/**
+ * Creates a hoisted download mock that can be used by the mocked export module.
+ *
+ * Hoisting is required because Vitest moves `vi.mock` calls above standard
+ * module imports before evaluating the test file.
+ */
+const {
+  downloadBlobMock,
+} = vi.hoisted(() => {
+  return {
+    downloadBlobMock: vi.fn(),
+  };
+});
+
+/**
+ * Preserves the real filename helper while replacing only the browser download
+ * function.
+ *
+ * This allows ExcelJS to generate a real workbook buffer without triggering an
+ * actual file download.
+ */
+vi.mock("../fileExportUtils", async () => {
+  const actualModule = await vi.importActual(
+    "../fileExportUtils"
+  );
+
+  return {
+    ...actualModule,
+    downloadBlob: downloadBlobMock,
+  };
+});
 
 import {
   createRowsForProcessStep,
   createVisioProcessRows,
+  exportProcessModelForVisio,
   getStepConnections,
   getVisioShapeType,
 } from "../visioExportUtils";
+
+// ========================================
+// Workbook Export Test Setup
+// ========================================
+
+/**
+ * Clears captured download calls before each test so workbook assertions remain
+ * isolated and deterministic.
+ */
+beforeEach(() => {
+  downloadBlobMock.mockClear();
+});
 
 // ========================================
 // Visio Shape Mapping Tests
@@ -258,4 +315,195 @@ test("uses a custom phase and safely handles invalid connection fields", () => {
       connectorLabel: "",
     },
   ]);
+});
+
+// ========================================
+// Complete Visio Workbook Export Tests
+// ========================================
+
+describe("exportProcessModelForVisio", () => {
+  /**
+   * Confirms that the complete export workflow creates a readable XLSX workbook
+   * containing the expected worksheet, table, headers, process rows, and
+   * connector labels.
+   *
+   * The browser download function is mocked, but ExcelJS performs the real
+   * workbook generation and serialization.
+   */
+  test("generates a Visio-ready workbook with labeled process rows", async () => {
+    const processModel = {
+      processName: "Vendor Invoice Review",
+      actors: [
+        "Accounts Payable",
+        "Finance Manager",
+      ],
+      steps: [
+        {
+          id: "STEP-001",
+          type: "start",
+          label: "Invoice received",
+          owner: "Accounts Payable",
+          connections: [
+            {
+              targetStepId: "STEP-002",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "STEP-002",
+          type: "decision",
+          label: "Is approval required?",
+          owner: "Accounts Payable",
+          connections: [
+            {
+              targetStepId: "STEP-003",
+              label: "Yes",
+            },
+            {
+              targetStepId: "STEP-004",
+              label: "No",
+            },
+          ],
+        },
+        {
+          id: "STEP-003",
+          type: "process",
+          label: "Approve invoice",
+          owner: "Finance Manager",
+          connections: [
+            {
+              targetStepId: "STEP-004",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "STEP-004",
+          type: "end",
+          label: "Invoice review completed",
+          owner: "Accounts Payable",
+          connections: [],
+        },
+      ],
+      warnings: [],
+    };
+
+    await exportProcessModelForVisio(processModel);
+
+    expect(downloadBlobMock).toHaveBeenCalledTimes(1);
+
+    const [
+      exportedBlob,
+      exportedFilename,
+    ] = downloadBlobMock.mock.calls[0];
+
+    expect(exportedBlob).toBeInstanceOf(Blob);
+
+    expect(exportedBlob.type).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    expect(exportedFilename).toBe(
+      "vendor-invoice-review-visio-process.xlsx"
+    );
+
+    /**
+     * Load the generated XLSX data back into ExcelJS so the workbook structure
+     * can be inspected without writing a temporary file to disk.
+     */
+    const workbookBuffer =
+      await exportedBlob.arrayBuffer();
+
+    const workbook = new ExcelJS.Workbook();
+
+    await workbook.xlsx.load(workbookBuffer);
+
+    const worksheet =
+      workbook.getWorksheet("Process Map");
+
+    expect(worksheet).toBeDefined();
+
+    const processTable =
+      worksheet.getTable("ProcessMapData");
+
+    expect(processTable).toBeDefined();
+
+    /**
+     * Inspect only the nine structured process-table columns.
+     *
+     * The worksheet also contains Visio import instructions farther to the right,
+     * so the complete row includes additional cells that are unrelated to the
+     * process table.
+     */
+    expect(
+      worksheet.getRow(1).values.slice(1, 10)
+    ).toEqual([
+      "Process Step ID",
+      "Process Step Description",
+      "Next Step ID",
+      "Connector Label",
+      "Shape Type",
+      "Function",
+      "Phase",
+      "Source Step Type",
+      "Outgoing Connection Count",
+    ]);
+
+    expect(
+      worksheet.getRow(2).values.slice(1, 10)
+    ).toEqual([
+      "STEP-001",
+      "Invoice received",
+      "STEP-002",
+      "",
+      "Start/End",
+      "Accounts Payable",
+      "Main Process",
+      "start",
+      1,
+    ]);
+
+    expect(
+      worksheet.getRow(3).values.slice(1, 10)
+    ).toEqual([
+      "STEP-002",
+      "Is approval required?",
+      "STEP-003",
+      "Yes",
+      "Decision",
+      "Accounts Payable",
+      "Main Process",
+      "decision",
+      2,
+    ]);
+
+    expect(
+      worksheet.getRow(4).values.slice(1, 10)
+    ).toEqual([
+      "STEP-002",
+      "Is approval required?",
+      "STEP-004",
+      "No",
+      "Decision",
+      "Accounts Payable",
+      "Main Process",
+      "decision",
+      2,
+    ]);
+
+    expect(
+      worksheet.getRow(6).values.slice(1, 10)
+    ).toEqual([
+      "STEP-004",
+      "Invoice review completed",
+      "",
+      "",
+      "Start/End",
+      "Accounts Payable",
+      "Main Process",
+      "end",
+      0,
+    ]);
+  });
 });
