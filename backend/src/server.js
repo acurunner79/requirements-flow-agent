@@ -4,6 +4,8 @@
 
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const dotenv = require("dotenv");
 
 // ========================================
@@ -45,26 +47,109 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ========================================
+// Cross-Origin Request Configuration
+// ========================================
+
+/**
+ * Converts the comma-separated frontend-origin environment variable into a
+ * normalized allowlist.
+ *
+ * Example:
+ * FRONTEND_ORIGINS=http://localhost:5173,https://example.com
+ */
+const configuredFrontendOrigins = (
+  process.env.FRONTEND_ORIGINS || ""
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+/**
+ * Local Vite origins remain available during development without requiring
+ * additional environment configuration.
+ */
+const allowedOrigins =
+  process.env.NODE_ENV === "production"
+    ? configuredFrontendOrigins
+    : [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        ...configuredFrontendOrigins,
+      ];
+
+// ========================================
 // Global Middleware
 // ========================================
 
 /**
- * Enables Cross-Origin Resource Sharing so the React frontend can communicate
- * with the backend while both applications run on separate local ports.
+ * Adds defensive HTTP response headers to reduce exposure to common browser
+ * and transport-level attacks.
  *
- * This unrestricted development configuration should later be replaced with an
- * environment-based allowlist before production deployment.
+ * Strict Transport Security is disabled during local development so browsers
+ * do not attempt to force localhost traffic from HTTP to HTTPS.
  */
-app.use(cors());
+app.use(
+  helmet({
+    strictTransportSecurity:
+      process.env.NODE_ENV === "production"
+        ? undefined
+        : false,
+
+    contentSecurityPolicy: {
+      directives: {
+        upgradeInsecureRequests:
+          process.env.NODE_ENV === "production"
+            ? []
+            : null,
+      },
+    },
+  })
+);
 
 /**
- * Parses incoming JSON request bodies and exposes the resulting values through
- * `req.body`.
+ * Restricts browser-based API access to explicitly approved frontend origins.
  *
- * The requirements-analysis endpoint depends on this middleware because the
- * frontend submits business requirements as JSON.
+ * Requests without an Origin header remain supported for tools such as curl,
+ * deployment health checks, and server-to-server communication.
  */
-app.use(express.json());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(
+        new Error(
+          "Cross-origin requests from this origin are not allowed."
+        )
+      );
+    },
+    methods: [
+      "GET",
+      "POST",
+      "OPTIONS",
+    ],
+    allowedHeaders: [
+      "Content-Type",
+    ],
+  })
+);
+
+/**
+ * Parses incoming JSON request bodies while enforcing a conservative payload
+ * limit.
+ *
+ * Business-requirements submissions are text-based and should not require large
+ * request bodies. Rejecting oversized payloads reduces accidental or malicious
+ * memory consumption.
+ */
+app.use(
+  express.json({
+    limit: process.env.JSON_BODY_LIMIT || "100kb",
+  })
+);
 
 // ========================================
 // Health Check Route
@@ -85,6 +170,32 @@ app.get("/api/health", (req, res) => {
 });
 
 // ========================================
+// Analysis Request Rate Limiting
+// ========================================
+
+/**
+ * Limits repeated analysis requests from the same client.
+ *
+ * AI-backed analysis can consume paid provider capacity, so this limiter helps
+ * reduce accidental request loops and basic abuse while leaving health checks
+ * unaffected.
+ */
+const analysisRateLimiter = rateLimit({
+  windowMs: Number(
+    process.env.ANALYSIS_RATE_LIMIT_WINDOW_MS || 60_000
+  ),
+  limit: Number(
+    process.env.ANALYSIS_RATE_LIMIT_MAX_REQUESTS || 10
+  ),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error:
+      "Too many analysis requests. Please wait before trying again.",
+  },
+});
+
+// ========================================
 // Application Routes
 // ========================================
 
@@ -94,7 +205,52 @@ app.get("/api/health", (req, res) => {
  * The `/analyze` route declared inside `analysisRoutes` is therefore exposed as:
  * POST `/api/analyze`
  */
+app.use(
+  "/api/analyze",
+  analysisRateLimiter
+);
+
 app.use("/api", analysisRoutes);
+
+// ========================================
+// Not Found and Error Handling
+// ========================================
+
+/**
+ * Returns a consistent JSON response for requests that do not match a known
+ * API route.
+ */
+app.use((req, res) => {
+  return res.status(404).json({
+    error: "The requested API route was not found.",
+  });
+});
+
+/**
+ * Converts unexpected middleware and routing failures into a production-safe
+ * JSON response.
+ *
+ * Detailed error information is logged on the server but is not exposed to
+ * clients in production.
+ */
+// eslint-disable-next-line no-unused-vars
+app.use((error, req, res, next) => {
+  console.error("Unhandled API error:", error);
+
+  const isProduction =
+    process.env.NODE_ENV === "production";
+
+  return res.status(
+    Number.isInteger(error.status)
+      ? error.status
+      : 500
+  ).json({
+    error: isProduction
+      ? "An unexpected server error occurred."
+      : error.message ||
+        "An unexpected server error occurred.",
+  });
+});
 
 // ========================================
 // Server Startup
