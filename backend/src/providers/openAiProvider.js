@@ -173,6 +173,108 @@ const extractOpenAiResponseText = (response) => {
 };
 
 // ========================================
+// OpenAI Error Classification
+// ========================================
+
+/**
+ * Converts an OpenAI SDK failure into a stable, production-safe application
+ * error.
+ *
+ * Provider messages can contain implementation details that should not be
+ * returned directly to browser clients. This helper classifies common failure
+ * categories using the SDK error name and HTTP status instead.
+ *
+ * @param {unknown} error
+ * Error thrown by the OpenAI SDK.
+ *
+ * @returns {Error}
+ * Safe provider-specific application error.
+ */
+const createOpenAiServiceError = (error) => {
+  const errorName =
+    error &&
+    typeof error === "object" &&
+    typeof error.name === "string"
+      ? error.name
+      : "";
+
+  const status =
+    error &&
+    typeof error === "object" &&
+    Number.isInteger(error.status)
+      ? error.status
+      : null;
+
+  if (
+    errorName === "APIConnectionTimeoutError" ||
+    status === 408
+  ) {
+    return new Error(
+      "OpenAI analysis timed out. Please try again."
+    );
+  }
+
+  if (
+    errorName === "AuthenticationError" ||
+    status === 401
+  ) {
+    return new Error(
+      "OpenAI authentication failed. Verify the backend API credentials."
+    );
+  }
+
+  if (
+    errorName === "PermissionDeniedError" ||
+    status === 403
+  ) {
+    return new Error(
+      "OpenAI denied access to the configured model or project."
+    );
+  }
+
+  if (
+    errorName === "RateLimitError" ||
+    status === 429
+  ) {
+    return new Error(
+      "OpenAI is temporarily rate limited. Please wait and try again."
+    );
+  }
+
+  if (
+    errorName === "APIConnectionError"
+  ) {
+    return new Error(
+      "The backend could not connect to OpenAI. Please try again."
+    );
+  }
+
+  if (
+    errorName === "InternalServerError" ||
+    (status !== null && status >= 500)
+  ) {
+    return new Error(
+      "OpenAI is temporarily unavailable. Please try again."
+    );
+  }
+
+  if (
+    errorName === "BadRequestError" ||
+    errorName === "UnprocessableEntityError" ||
+    status === 400 ||
+    status === 422
+  ) {
+    return new Error(
+      "OpenAI rejected the analysis request configuration."
+    );
+  }
+
+  return new Error(
+    "OpenAI process analysis failed unexpectedly."
+  );
+};
+
+// ========================================
 // OpenAI Process Analysis
 // ========================================
 
@@ -227,7 +329,7 @@ const analyzeWithOpenAi = async (prompt) => {
   } catch (error) {
     /**
      * Preserve configuration and adapter-generated errors because they already
-     * contain actionable diagnostic information.
+     * contain controlled, actionable diagnostic information.
      */
     if (
       error instanceof Error &&
@@ -243,27 +345,38 @@ const analyzeWithOpenAi = async (prompt) => {
     }
 
     /**
-     * Convert SDK failures into a provider-specific service error without
-     * exposing API keys, request headers, or complete provider response data.
-     *
-     * The original SDK message is included during development because it can
-     * identify billing, authentication, model-access, rate-limit, and request
-     * configuration problems.
+     * Log provider diagnostics on the backend without returning raw SDK details
+     * to the frontend.
      */
-    const providerMessage =
-      error instanceof Error && error.message
-        ? error.message
-        : "Unknown OpenAI API error.";
+    console.error("OpenAI analysis request failed.", {
+      name:
+        error &&
+        typeof error === "object"
+          ? error.name
+          : undefined,
 
-    throw new Error(
-      `OpenAI process analysis failed: ${providerMessage}`
-    );
+      status:
+        error &&
+        typeof error === "object"
+          ? error.status
+          : undefined,
+
+      requestId:
+        error &&
+        typeof error === "object"
+          ? error.request_id
+          : undefined,
+    });
+
+    throw createOpenAiServiceError(error);
   }
 };
+
 
 module.exports = {
   analyzeWithOpenAi,
   createOpenAiClient,
+  createOpenAiServiceError,
   extractOpenAiResponseText,
   validateOpenAiConfiguration,
 };
