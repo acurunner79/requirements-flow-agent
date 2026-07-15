@@ -29,8 +29,8 @@ const SUPPORTED_PROCESS_STEP_TYPES = [
  * - `label`: Optional connector text such as Yes, No, Approved, or Rejected
  *
  * The AI provider should not return the legacy `nextStepIds` property.
- * Backend normalization derives that compatibility mirror from `connections`
- * when older application modules still require it.
+ * Backend normalization accepts legacy provider input when necessary, but the
+ * normalized application model exposes only rich `connections`.
  *
  * This object is used only as a prompt example. It is never returned directly
  * to the client.
@@ -205,8 +205,8 @@ ANALYSIS RULES
    outcomes.
 9. Do not include the legacy nextStepIds property.
 10. End steps must use an empty connections array.
-11. The backend will derive any temporary compatibility fields after receiving
-    the response.
+11. The normalized application model must expose only the rich connections
+    structure for outgoing paths.
 12. Do not invent missing business rules, thresholds, approvals, owners, branch
     outcomes, or exception paths.
 13. When required information is missing, contradictory, or ambiguous, preserve

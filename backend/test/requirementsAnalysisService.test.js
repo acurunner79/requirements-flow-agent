@@ -1,0 +1,279 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const {
+  createAiProcessModelFactory,
+  createMockProcessModel,
+  validateAnalysisMode,
+} = require("../src/services/requirementsAnalysisService");
+
+// ========================================
+// Mock Process Model Tests
+// ========================================
+
+/**
+ * Confirms that mock analysis returns the deterministic fixture while trimming
+ * the submitted requirements before storing them as source traceability data.
+ */
+test("creates a trimmed mock process model", () => {
+  const processModel = createMockProcessModel(
+    "   Review vendor invoices.   "
+  );
+
+  assert.equal(
+    processModel.processName,
+    "Vendor Invoice Review"
+  );
+
+  assert.equal(
+    processModel.sourceText,
+    "Review vendor invoices."
+  );
+
+  assert.ok(Array.isArray(processModel.actors));
+  assert.ok(Array.isArray(processModel.steps));
+  assert.ok(Array.isArray(processModel.warnings));
+
+  processModel.steps.forEach((step) => {
+    assert.ok(Array.isArray(step.connections));
+
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(
+        step,
+        "nextStepIds"
+      ),
+      false
+    );
+  });
+});
+
+/**
+ * Confirms that every mock request receives an independent deep clone.
+ *
+ * Mutating one returned process model must not alter another response or the
+ * shared fixture stored in Node's module cache.
+ */
+test("creates independent mock process model copies", () => {
+  const firstModel = createMockProcessModel(
+    "First request"
+  );
+
+  const secondModel = createMockProcessModel(
+    "Second request"
+  );
+
+  firstModel.processName = "Changed Process";
+  firstModel.actors.push("Temporary Actor");
+  firstModel.steps[0].label = "Changed step";
+  firstModel.steps[0].connections.push({
+    targetStepId: "STEP-999",
+    label: "Temporary",
+  });
+
+  assert.equal(
+    secondModel.processName,
+    "Vendor Invoice Review"
+  );
+
+  assert.equal(
+    secondModel.actors.includes("Temporary Actor"),
+    false
+  );
+
+  assert.equal(
+    secondModel.steps[0].label,
+    "Invoice received"
+  );
+
+  assert.equal(
+    secondModel.steps[0].connections.some(
+      (connection) =>
+        connection.targetStepId === "STEP-999"
+    ),
+    false
+  );
+});
+
+// ========================================
+// Analysis Mode Validation Tests
+// ========================================
+
+/**
+ * Confirms that every supported analysis mode passes validation without
+ * throwing an error.
+ */
+test("accepts supported analysis modes", () => {
+  assert.doesNotThrow(() =>
+    validateAnalysisMode("mock")
+  );
+
+  assert.doesNotThrow(() =>
+    validateAnalysisMode("ai")
+  );
+});
+
+/**
+ * Confirms that unsupported analysis modes fail with a descriptive
+ * configuration error instead of silently falling back to another mode.
+ */
+test("rejects unsupported analysis modes", () => {
+  assert.throws(
+    () =>
+      validateAnalysisMode("recorded"),
+    {
+      message:
+        "Unsupported ANALYSIS_MODE: recorded. Supported modes are: mock, ai.",
+    }
+  );
+});
+
+// ========================================
+// AI Process Workflow Tests
+// ========================================
+
+/**
+ * Confirms that the AI workflow:
+ * - Builds a prompt from the submitted requirements
+ * - Sends that prompt to the provider boundary
+ * - Passes the raw provider response to the response processor
+ * - Returns the normalized process model unchanged
+ *
+ * Every dependency is local and deterministic, so this test cannot contact a
+ * live AI provider or consume API tokens.
+ */
+test("runs the complete AI process workflow through injected dependencies", async () => {
+  let receivedRequirements = null;
+  let receivedPrompt = null;
+  let receivedProviderResponse = null;
+
+  const expectedProcessModel = {
+    processName: "Refund Review",
+    actors: [
+      "Customer Service",
+    ],
+    steps: [
+      {
+        id: "STEP-001",
+        type: "end",
+        label: "Refund review completed",
+        owner: "Customer Service",
+        connections: [],
+      },
+    ],
+    warnings: [],
+  };
+
+  const promptBuilder = (requirements) => {
+    receivedRequirements = requirements;
+
+    return `Analyze these requirements: ${requirements}`;
+  };
+
+  const providerAnalyzer = async (prompt) => {
+    receivedPrompt = prompt;
+
+    return "{\"raw\":\"provider response\"}";
+  };
+
+  const responseProcessor = (responseText) => {
+    receivedProviderResponse = responseText;
+
+    return expectedProcessModel;
+  };
+
+  const analyzeWithInjectedWorkflow =
+    createAiProcessModelFactory({
+      promptBuilder,
+      providerAnalyzer,
+      responseProcessor,
+    });
+
+  const result = await analyzeWithInjectedWorkflow(
+    "Review refund requests."
+  );
+
+  assert.equal(
+    receivedRequirements,
+    "Review refund requests."
+  );
+
+  assert.equal(
+    receivedPrompt,
+    "Analyze these requirements: Review refund requests."
+  );
+
+  assert.equal(
+    receivedProviderResponse,
+    "{\"raw\":\"provider response\"}"
+  );
+
+  assert.equal(result, expectedProcessModel);
+});
+
+/**
+ * Confirms that provider failures propagate to the controller boundary instead
+ * of being swallowed or replaced inside the service layer.
+ *
+ * The controller is responsible for converting this failure into an HTTP 500
+ * response.
+ */
+test("propagates provider failures from the AI workflow", async () => {
+  const analyzeWithInjectedWorkflow =
+    createAiProcessModelFactory({
+      promptBuilder: () => "Generated prompt",
+
+      providerAnalyzer: async () => {
+        throw new Error("Provider request failed.");
+      },
+
+      responseProcessor: () => {
+        throw new Error(
+          "Response processor should not run after provider failure."
+        );
+      },
+    });
+
+  await assert.rejects(
+    () =>
+      analyzeWithInjectedWorkflow(
+        "Review refund requests."
+      ),
+    {
+      message: "Provider request failed.",
+    }
+  );
+});
+
+/**
+ * Confirms that response-processing failures also propagate unchanged.
+ *
+ * This protects JSON parsing and normalization errors so the controller can
+ * return a consistent failure response while retaining the original diagnostic
+ * message server-side.
+ */
+test("propagates response-processing failures from the AI workflow", async () => {
+  const analyzeWithInjectedWorkflow =
+    createAiProcessModelFactory({
+      promptBuilder: () => "Generated prompt",
+
+      providerAnalyzer: async () =>
+        "invalid provider response",
+
+      responseProcessor: () => {
+        throw new Error(
+          "The AI provider returned invalid JSON for the process model."
+        );
+      },
+    });
+
+  await assert.rejects(
+    () =>
+      analyzeWithInjectedWorkflow(
+        "Review refund requests."
+      ),
+    {
+      message:
+        "The AI provider returned invalid JSON for the process model.",
+    }
+  );
+});

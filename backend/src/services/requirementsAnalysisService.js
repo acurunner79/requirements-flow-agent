@@ -122,43 +122,76 @@ const createMockProcessModel = (requirements) => {
 };
 
 // ========================================
-// AI-Powered Process Analysis
+// AI Process Model Factory
 // ========================================
 
 /**
- * Converts business requirements into a structured process model through the
- * centrally configured AI provider.
+ * Creates an AI-powered process-analysis function using the supplied workflow
+ * dependencies.
  *
- * The workflow remains provider-independent:
- * 1. Build a provider-neutral process-analysis prompt
- * 2. Submit the prompt through the configured provider service
- * 3. Parse and normalize the provider response
- * 4. Return the standard process-model contract
+ * Dependency injection allows automated tests to verify prompt construction,
+ * provider invocation, response normalization, and error propagation without
+ * loading a live provider adapter or consuming API tokens.
  *
- * Provider credentials, model selection, request construction, and response
- * extraction remain outside this service in dedicated provider modules.
+ * Production continues using the real prompt builder, configured provider
+ * service, and response normalizer.
  *
- * @param {string} requirements
- * Validated business-requirements text supplied by the user.
+ * @param {object} dependencies
+ * AI workflow dependencies.
  *
- * @returns {Promise<object>}
- * Normalized process model compatible with the frontend review workspace.
+ * @param {(requirements: string) => string} dependencies.promptBuilder
+ * Function that converts requirements into a provider-neutral prompt.
  *
- * @throws {Error}
- * Throws when prompt construction, provider communication, JSON parsing, or
- * response normalization fails.
+ * @param {(prompt: string) => Promise<string>} dependencies.providerAnalyzer
+ * Function that submits the prompt and returns the raw provider response.
+ *
+ * @param {(responseText: string) => object} dependencies.responseProcessor
+ * Function that parses and normalizes the raw provider response.
+ *
+ * @returns {(requirements: string) => Promise<object>}
+ * Configured AI process-analysis function.
  */
-const createAiProcessModel = async (requirements) => {
-  const processAnalysisPrompt =
-    buildProcessAnalysisPrompt(requirements);
+const createAiProcessModelFactory = ({
+  promptBuilder,
+  providerAnalyzer,
+  responseProcessor,
+}) => {
+  return async (requirements) => {
+    /**
+     * Build the complete provider-neutral prompt from the validated business
+     * requirements.
+     */
+    const processAnalysisPrompt =
+      promptBuilder(requirements);
 
-  const rawProviderResponse =
-    await analyzeWithConfiguredProvider(
-      processAnalysisPrompt
-    );
+    /**
+     * Submit the generated prompt through the configured provider boundary.
+     */
+    const rawProviderResponse =
+      await providerAnalyzer(
+        processAnalysisPrompt
+      );
 
-  return processAiResponse(rawProviderResponse);
+    /**
+     * Convert the raw provider output into the standard application contract.
+     */
+    return responseProcessor(rawProviderResponse);
+  };
 };
+
+// ========================================
+// Production AI Process Analysis
+// ========================================
+
+/**
+ * Production AI workflow configured with the real application dependencies.
+ */
+const createAiProcessModel =
+  createAiProcessModelFactory({
+    promptBuilder: buildProcessAnalysisPrompt,
+    providerAnalyzer: analyzeWithConfiguredProvider,
+    responseProcessor: processAiResponse,
+  });
 
 // ========================================
 // Requirements Analysis Service
@@ -200,6 +233,7 @@ module.exports = {
   ANALYSIS_MODES,
   analyzeBusinessRequirements,
   createAiProcessModel,
+  createAiProcessModelFactory,
   createMockProcessModel,
   validateAnalysisMode,
 };
