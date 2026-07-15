@@ -4,6 +4,9 @@ const express = require("express");
 const request = require("supertest");
 
 const analysisRoutes = require("../src/routes/analysisRoutes");
+const {
+  requestCorrelationMiddleware,
+} = require("../src/middleware/requestCorrelationMiddleware");
 
 // ========================================
 // Test Application Setup
@@ -21,11 +24,103 @@ const analysisRoutes = require("../src/routes/analysisRoutes");
 const createTestApp = () => {
   const app = express();
 
+  app.use(requestCorrelationMiddleware);
   app.use(express.json());
   app.use("/api", analysisRoutes);
 
   return app;
 };
+
+// ========================================
+// Request Correlation Tests
+// ========================================
+
+/**
+ * Confirms that the backend generates a request identifier when the client does
+ * not supply one.
+ *
+ * The identifier is returned in the response header so browser clients and
+ * server logs can reference the same request.
+ */
+test(
+  "POST /api/analyze generates an X-Request-ID response header",
+  async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .post("/api/analyze")
+      .send({
+        requirements:
+          "Review vendor invoices and route exceptions for approval.",
+      });
+
+    const requestId =
+      response.headers["x-request-id"];
+
+    assert.equal(response.status, 200);
+    assert.equal(typeof requestId, "string");
+    assert.ok(requestId.trim().length > 0);
+  }
+);
+
+/**
+ * Confirms that a usable client-provided request identifier is preserved.
+ *
+ * This allows an approved frontend, proxy, or upstream service to establish the
+ * identifier used throughout one distributed request path.
+ */
+test(
+  "POST /api/analyze preserves a supplied X-Request-ID header",
+  async () => {
+    const app = createTestApp();
+
+    const suppliedRequestId =
+      "requirements-flow-test-001";
+
+    const response = await request(app)
+      .post("/api/analyze")
+      .set(
+        "X-Request-ID",
+        suppliedRequestId
+      )
+      .send({
+        requirements:
+          "Review refund requests and route exceptions.",
+      });
+
+    assert.equal(response.status, 200);
+
+    assert.equal(
+      response.headers["x-request-id"],
+      suppliedRequestId
+    );
+  }
+);
+
+/**
+ * Confirms that correlation identifiers remain available when request
+ * validation fails.
+ *
+ * Error responses must remain traceable even when the analysis workflow never
+ * reaches the provider.
+ */
+test(
+  "POST /api/analyze includes X-Request-ID on validation errors",
+  async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .post("/api/analyze")
+      .send({});
+
+    const requestId =
+      response.headers["x-request-id"];
+
+    assert.equal(response.status, 400);
+    assert.equal(typeof requestId, "string");
+    assert.ok(requestId.trim().length > 0);
+  }
+);
 
 // ========================================
 // POST /api/analyze Tests

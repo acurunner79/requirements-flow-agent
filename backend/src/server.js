@@ -2,6 +2,9 @@
 // Core Dependencies
 // ========================================
 
+const {
+  requestCorrelationMiddleware,
+} = require("./middleware/requestCorrelationMiddleware");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -106,6 +109,24 @@ app.use(
   })
 );
 
+// ========================================
+// Request Correlation Middleware
+// ========================================
+
+/**
+ * Assigns one correlation identifier to every incoming API request.
+ *
+ * A client-supplied `X-Request-ID` value is preserved when it contains usable
+ * text. Otherwise, the backend creates a UUID using Node's cryptographic random
+ * identifier generator.
+ *
+ * The identifier is:
+ * - Stored on `req.requestId` for controllers and services
+ * - Returned through the `X-Request-ID` response header
+ * - Available to server logs without recording request-body content
+ */
+app.use(requestCorrelationMiddleware);
+
 /**
  * Restricts browser-based API access to explicitly approved frontend origins.
  *
@@ -133,6 +154,10 @@ app.use(
     ],
     allowedHeaders: [
       "Content-Type",
+      "X-Request-ID",
+    ],
+    exposedHeaders: [
+      "X-Request-ID",
     ],
   })
 );
@@ -235,7 +260,21 @@ app.use((req, res) => {
  */
 // eslint-disable-next-line no-unused-vars
 app.use((error, req, res, next) => {
-  console.error("Unhandled API error:", error);
+  console.error(
+  "Unhandled API error.",
+  {
+    event: "api_unhandled_error",
+    requestId: req.requestId,
+    errorName:
+      error instanceof Error
+        ? error.name
+        : "UnknownError",
+    errorMessage:
+      error instanceof Error
+        ? error.message
+        : "Unknown API error.",
+  }
+);
 
   const isProduction =
     process.env.NODE_ENV === "production";
