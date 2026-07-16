@@ -587,6 +587,622 @@ const normalizeWarnings = (warnings) => {
 };
 
 // ========================================
+// Unreachable Process Step Detection
+// ========================================
+
+/**
+ * Finds process steps that cannot be reached from the single start step.
+ *
+ * The function performs a graph traversal beginning at the start step and
+ * follows every normalized connection target. Any step not visited during that
+ * traversal is considered unreachable.
+ *
+ * Returned IDs preserve the original process-model order so generated warnings
+ * and user-facing diagnostics remain deterministic.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   type: string,
+ *   connections: Array<{ targetStepId: string }>
+ * }>} steps
+ * Normalized process steps with validated identifiers and connection targets.
+ *
+ * @returns {string[]}
+ * IDs of process steps that cannot be reached from the start step.
+ */
+const findUnreachableProcessStepIds = (steps) => {
+  const startStep = steps.find(
+    (step) => step.type === "start"
+  );
+
+  if (!startStep) {
+    return steps.map((step) => step.id);
+  }
+
+  const stepsById = new Map(
+    steps.map((step) => [
+      step.id,
+      step,
+    ])
+  );
+
+  const reachableStepIds = new Set();
+  const pendingStepIds = [
+    startStep.id,
+  ];
+
+  while (pendingStepIds.length > 0) {
+    const currentStepId =
+      pendingStepIds.pop();
+
+    if (reachableStepIds.has(currentStepId)) {
+      continue;
+    }
+
+    reachableStepIds.add(currentStepId);
+
+    const currentStep =
+      stepsById.get(currentStepId);
+
+    if (!currentStep) {
+      continue;
+    }
+
+    currentStep.connections.forEach((connection) => {
+      if (
+        !reachableStepIds.has(
+          connection.targetStepId
+        )
+      ) {
+        pendingStepIds.push(
+          connection.targetStepId
+        );
+      }
+    });
+  }
+
+  return steps
+    .filter(
+      (step) =>
+        !reachableStepIds.has(step.id)
+    )
+    .map((step) => step.id);
+};
+
+// ========================================
+// Disconnected Workflow Section Detection
+// ========================================
+
+/**
+ * Finds workflow sections that are disconnected from the primary section
+ * containing the single start step.
+ *
+ * Connections are treated as undirected for this quality check. This allows
+ * the detector to identify separate workflow islands even when their internal
+ * connections point only in one direction.
+ *
+ * Each returned section preserves the original process-model step order.
+ * Sections are also returned in the order their first step appears.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   type: string,
+ *   connections: Array<{ targetStepId: string }>
+ * }>} steps
+ * Normalized process steps with validated identifiers and connection targets.
+ *
+ * @returns {string[][]}
+ * Disconnected workflow sections represented as ordered step-ID collections.
+ */
+const findDisconnectedProcessSections = (steps) => {
+  const startStep = steps.find(
+    (step) => step.type === "start"
+  );
+
+  if (!startStep) {
+    return [];
+  }
+
+  const stepOrder = new Map(
+    steps.map((step, index) => [
+      step.id,
+      index,
+    ])
+  );
+
+  const adjacentStepIds = new Map(
+    steps.map((step) => [
+      step.id,
+      new Set(),
+    ])
+  );
+
+  /**
+   * Build an undirected adjacency map so connected workflow islands can be
+   * detected regardless of connection direction.
+   */
+  steps.forEach((step) => {
+    step.connections.forEach((connection) => {
+      adjacentStepIds
+        .get(step.id)
+        .add(connection.targetStepId);
+
+      adjacentStepIds
+        .get(connection.targetStepId)
+        .add(step.id);
+    });
+  });
+
+  const visitedStepIds = new Set();
+
+  /**
+   * Traverses one complete connected section beginning with the supplied step.
+   *
+   * @param {string} initialStepId
+   * First step in the section.
+   *
+   * @returns {string[]}
+   * IDs belonging to the connected section.
+   */
+  const collectSectionStepIds = (
+    initialStepId
+  ) => {
+    const sectionStepIds = [];
+    const pendingStepIds = [
+      initialStepId,
+    ];
+
+    while (pendingStepIds.length > 0) {
+      const currentStepId =
+        pendingStepIds.pop();
+
+      if (visitedStepIds.has(currentStepId)) {
+        continue;
+      }
+
+      visitedStepIds.add(currentStepId);
+      sectionStepIds.push(currentStepId);
+
+      adjacentStepIds
+        .get(currentStepId)
+        .forEach((adjacentStepId) => {
+          if (!visitedStepIds.has(adjacentStepId)) {
+            pendingStepIds.push(adjacentStepId);
+          }
+        });
+    }
+
+    return sectionStepIds.sort(
+      (firstStepId, secondStepId) =>
+        stepOrder.get(firstStepId) -
+        stepOrder.get(secondStepId)
+    );
+  };
+
+  /**
+   * Mark the section containing the start step as the primary workflow.
+   */
+  collectSectionStepIds(startStep.id);
+
+  const disconnectedSections = [];
+
+  steps.forEach((step) => {
+    if (visitedStepIds.has(step.id)) {
+      return;
+    }
+
+    disconnectedSections.push(
+      collectSectionStepIds(step.id)
+    );
+  });
+
+  return disconnectedSections;
+};
+
+// ========================================
+// Unexpected Dead-End Detection
+// ========================================
+
+/**
+ * Finds non-terminal process steps that have no outgoing connections.
+ *
+ * End steps are valid terminal outcomes and are intentionally excluded. Any
+ * other step type without a connection is considered an unexpected dead end
+ * that should be reviewed.
+ *
+ * Returned IDs preserve the original process-model order.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   type: string,
+ *   connections: Array<{ targetStepId: string }>
+ * }>} steps
+ * Normalized process steps.
+ *
+ * @returns {string[]}
+ * IDs of non-end steps with no outgoing connections.
+ */
+const findUnexpectedDeadEndStepIds = (steps) => {
+  return steps
+    .filter(
+      (step) =>
+        step.type !== "end" &&
+        step.connections.length === 0
+    )
+    .map((step) => step.id);
+};
+
+// ========================================
+// Unreachable End-Step Detection
+// ========================================
+
+/**
+ * Finds end steps that cannot be reached from the single start step.
+ *
+ * This quality check reuses the general unreachable-step detector and narrows
+ * the result to terminal outcomes. Returned IDs preserve the original
+ * process-model order.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   type: string,
+ *   connections: Array<{ targetStepId: string }>
+ * }>} steps
+ * Normalized process steps.
+ *
+ * @returns {string[]}
+ * IDs of unreachable end steps.
+ */
+const findUnreachableEndStepIds = (steps) => {
+  const unreachableStepIds = new Set(
+    findUnreachableProcessStepIds(steps)
+  );
+
+  return steps
+    .filter(
+      (step) =>
+        step.type === "end" &&
+        unreachableStepIds.has(step.id)
+    )
+    .map((step) => step.id);
+};
+
+// ========================================
+// Circular Process Path Detection
+// ========================================
+
+/**
+ * Finds groups of process steps that participate in directed cycles.
+ *
+ * Strongly connected components are used so steps that merely lead into or out
+ * of a cycle are not included. Components containing multiple steps are
+ * circular. A single step is circular only when it connects to itself.
+ *
+ * Step IDs within each group and the groups themselves preserve the original
+ * process-model order.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   connections: Array<{ targetStepId: string }>
+ * }>} steps
+ * Normalized process steps.
+ *
+ * @returns {string[][]}
+ * Ordered groups of step IDs participating in circular paths.
+ */
+const findCircularProcessStepGroups = (steps) => {
+  const stepOrder = new Map(
+    steps.map((step, index) => [
+      step.id,
+      index,
+    ])
+  );
+
+  const stepById = new Map(
+    steps.map((step) => [
+      step.id,
+      step,
+    ])
+  );
+
+  const discoveryIndexes = new Map();
+  const lowLinkIndexes = new Map();
+  const activeStepIds = new Set();
+  const traversalStack = [];
+  const circularGroups = [];
+
+  let nextDiscoveryIndex = 0;
+
+  /**
+   * Performs Tarjan's strongly connected component traversal from one step.
+   *
+   * @param {string} stepId
+   * Current step identifier.
+   *
+   * @returns {void}
+   */
+  const visitStep = (stepId) => {
+    discoveryIndexes.set(
+      stepId,
+      nextDiscoveryIndex
+    );
+
+    lowLinkIndexes.set(
+      stepId,
+      nextDiscoveryIndex
+    );
+
+    nextDiscoveryIndex += 1;
+
+    traversalStack.push(stepId);
+    activeStepIds.add(stepId);
+
+    const step = stepById.get(stepId);
+
+    step.connections.forEach((connection) => {
+      const targetStepId =
+        connection.targetStepId;
+
+      if (!stepById.has(targetStepId)) {
+        return;
+      }
+
+      if (!discoveryIndexes.has(targetStepId)) {
+        visitStep(targetStepId);
+
+        lowLinkIndexes.set(
+          stepId,
+          Math.min(
+            lowLinkIndexes.get(stepId),
+            lowLinkIndexes.get(targetStepId)
+          )
+        );
+
+        return;
+      }
+
+      if (activeStepIds.has(targetStepId)) {
+        lowLinkIndexes.set(
+          stepId,
+          Math.min(
+            lowLinkIndexes.get(stepId),
+            discoveryIndexes.get(targetStepId)
+          )
+        );
+      }
+    });
+
+    const isComponentRoot =
+      lowLinkIndexes.get(stepId) ===
+      discoveryIndexes.get(stepId);
+
+    if (!isComponentRoot) {
+      return;
+    }
+
+    const componentStepIds = [];
+    let componentStepId;
+
+    do {
+      componentStepId =
+        traversalStack.pop();
+
+      activeStepIds.delete(componentStepId);
+      componentStepIds.push(componentStepId);
+    } while (componentStepId !== stepId);
+
+    const orderedComponentStepIds =
+      componentStepIds.sort(
+        (firstStepId, secondStepId) =>
+          stepOrder.get(firstStepId) -
+          stepOrder.get(secondStepId)
+      );
+
+    const containsMultipleSteps =
+      orderedComponentStepIds.length > 1;
+
+    const containsSelfConnection =
+      orderedComponentStepIds.length === 1 &&
+      stepById
+        .get(orderedComponentStepIds[0])
+        .connections.some(
+          (connection) =>
+            connection.targetStepId ===
+            orderedComponentStepIds[0]
+        );
+
+    if (
+      containsMultipleSteps ||
+      containsSelfConnection
+    ) {
+      circularGroups.push(
+        orderedComponentStepIds
+      );
+    }
+  };
+
+  steps.forEach((step) => {
+    if (!discoveryIndexes.has(step.id)) {
+      visitStep(step.id);
+    }
+  });
+
+  return circularGroups.sort(
+    (firstGroup, secondGroup) =>
+      stepOrder.get(firstGroup[0]) -
+      stepOrder.get(secondGroup[0])
+  );
+};
+
+// ========================================
+// Decision Branch Count Detection
+// ========================================
+
+/**
+ * Finds decision steps that have fewer than two outgoing branches.
+ *
+ * A valid decision should provide at least two possible outcomes. Returned IDs
+ * preserve the original process-model order.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   type: string,
+ *   connections: Array<{ targetStepId: string }>
+ * }>} steps
+ * Normalized process steps.
+ *
+ * @returns {string[]}
+ * IDs of decision steps with insufficient outgoing branches.
+ */
+const findDecisionStepIdsWithInsufficientBranches = (steps) => {
+  return steps
+    .filter(
+      (step) =>
+        step.type === "decision" &&
+        step.connections.length < 2
+    )
+    .map((step) => step.id);
+};
+
+// ========================================
+// Decision Branch Label Detection
+// ========================================
+
+/**
+ * Finds decision steps containing duplicate or unlabeled outgoing branches.
+ *
+ * Duplicate comparisons ignore capitalization and surrounding whitespace while
+ * preserving the first readable label for warning output.
+ *
+ * @param {Array<{
+ *   id: string,
+ *   type: string,
+ *   connections: Array<{
+ *     targetStepId: string,
+ *     label: string
+ *   }>
+ * }>} steps
+ * Normalized process steps.
+ *
+ * @returns {Array<{
+ *   stepId: string,
+ *   duplicateLabels: string[],
+ *   unlabeledBranchCount: number
+ * }>}
+ * Ordered decision-branch label issues.
+ */
+const findDecisionBranchLabelIssues = (steps) => {
+  return steps
+    .filter((step) => step.type === "decision")
+    .map((step) => {
+      const readableLabelByNormalizedValue =
+        new Map();
+
+      const duplicateNormalizedLabels =
+        new Set();
+
+      let unlabeledBranchCount = 0;
+
+      step.connections.forEach((connection) => {
+        const readableLabel =
+          typeof connection.label === "string"
+            ? connection.label.trim()
+            : "";
+
+        if (!readableLabel) {
+          unlabeledBranchCount += 1;
+          return;
+        }
+
+        const normalizedLabel =
+          readableLabel.toLowerCase();
+
+        if (
+          readableLabelByNormalizedValue.has(
+            normalizedLabel
+          )
+        ) {
+          duplicateNormalizedLabels.add(
+            normalizedLabel
+          );
+
+          return;
+        }
+
+        readableLabelByNormalizedValue.set(
+          normalizedLabel,
+          readableLabel
+        );
+      });
+
+      const duplicateLabels = Array.from(
+        duplicateNormalizedLabels
+      ).map((normalizedLabel) =>
+        readableLabelByNormalizedValue.get(
+          normalizedLabel
+        )
+      );
+
+      return {
+        stepId: step.id,
+        duplicateLabels,
+        unlabeledBranchCount,
+      };
+    })
+    .filter(
+      (issue) =>
+        issue.duplicateLabels.length > 0 ||
+        issue.unlabeledBranchCount > 0
+    );
+};
+
+// ========================================
+// Unused Actor Detection
+// ========================================
+
+/**
+ * Finds actors that are listed in the process model but are not assigned as the
+ * owner of any process step.
+ *
+ * Actor comparisons ignore capitalization and surrounding whitespace while
+ * returned names preserve the original actor-list order and formatting.
+ *
+ * @param {string[]} actors
+ * Normalized process actors.
+ *
+ * @param {Array<{
+ *   owner: string
+ * }>} steps
+ * Normalized process steps.
+ *
+ * @returns {string[]}
+ * Ordered actor names that are not used by any process step.
+ */
+const findUnusedActors = (actors, steps) => {
+  const usedActorNames = new Set(
+    steps
+      .map((step) =>
+        typeof step.owner === "string"
+          ? step.owner.trim().toLowerCase()
+          : ""
+      )
+      .filter(Boolean)
+  );
+
+  return actors.filter((actor) => {
+    const normalizedActor =
+      typeof actor === "string"
+        ? actor.trim().toLowerCase()
+        : "";
+
+    return (
+      normalizedActor &&
+      !usedActorNames.has(normalizedActor)
+    );
+  });
+};
+
+// ========================================
 // Normalized Process Structure Validation
 // ========================================
 
@@ -720,6 +1336,170 @@ const normalizeProcessModelResponse = (parsedResponse) => {
    */
   validateNormalizedProcessSteps(normalizedSteps);
 
+  /**
+   * Preserve provider-generated warnings before adding deterministic
+   * process-quality warnings discovered during backend analysis.
+   */
+  const normalizedWarnings = normalizeWarnings(
+    parsedResponse.warnings
+  );
+
+  const unreachableStepIds =
+    findUnreachableProcessStepIds(
+      normalizedSteps
+    );
+
+  if (unreachableStepIds.length > 0) {
+    normalizedWarnings.push({
+      code: "UNREACHABLE_PROCESS_STEPS",
+      message:
+        `The following process steps cannot be reached from the start step: ${unreachableStepIds.join(
+          ", "
+        )}.`,
+    });
+  }
+
+  const disconnectedSections =
+    findDisconnectedProcessSections(
+      normalizedSteps
+    );
+
+  disconnectedSections.forEach(
+    (sectionStepIds, index) => {
+      normalizedWarnings.push({
+        code:
+          `DISCONNECTED_PROCESS_SECTION_${String(
+            index + 1
+          ).padStart(3, "0")}`,
+        message:
+          `The following process steps form a disconnected workflow section: ${sectionStepIds.join(
+            ", "
+          )}.`,
+      });
+    }
+  );
+
+    /**
+   * Surface non-terminal steps that unexpectedly stop without an outgoing
+   * connection.
+   */
+  const unexpectedDeadEndStepIds =
+    findUnexpectedDeadEndStepIds(
+      normalizedSteps
+    );
+
+  if (unexpectedDeadEndStepIds.length > 0) {
+    normalizedWarnings.push({
+      code: "UNEXPECTED_PROCESS_DEAD_ENDS",
+      message:
+        `The following non-terminal process steps have no outgoing connections: ${unexpectedDeadEndStepIds.join(
+          ", "
+        )}.`,
+    });
+  }
+
+  /**
+   * Surface terminal outcomes that exist in the model but cannot be reached
+   * from the process start.
+   */
+  const unreachableEndStepIds =
+    findUnreachableEndStepIds(
+      normalizedSteps
+    );
+
+  if (unreachableEndStepIds.length > 0) {
+    normalizedWarnings.push({
+      code: "UNREACHABLE_END_STEPS",
+      message:
+        `The following end process steps cannot be reached from the start step: ${unreachableEndStepIds.join(
+          ", "
+        )}.`,
+    });
+  }
+
+  /**
+   * Surface circular process paths for human review.
+   *
+   * Some loops are intentional, such as revision or retry paths, so circular
+   * groups are preserved and reported as warnings instead of rejected.
+   */
+  const circularProcessStepGroups =
+    findCircularProcessStepGroups(
+      normalizedSteps
+    );
+
+  circularProcessStepGroups.forEach(
+    (groupStepIds, index) => {
+      normalizedWarnings.push({
+        code:
+          `CIRCULAR_PROCESS_PATH_${String(
+            index + 1
+          ).padStart(3, "0")}`,
+        message:
+          `The following process steps form a circular path that should be reviewed: ${groupStepIds.join(
+            ", "
+          )}.`,
+      });
+    }
+  );
+
+  /**
+   * Surface decision steps that do not provide enough outgoing outcomes.
+   */
+  const decisionStepIdsWithInsufficientBranches =
+    findDecisionStepIdsWithInsufficientBranches(
+      normalizedSteps
+    );
+
+  if (
+    decisionStepIdsWithInsufficientBranches.length > 0
+  ) {
+    normalizedWarnings.push({
+      code: "INSUFFICIENT_DECISION_BRANCHES",
+      message:
+        `The following decision process steps have fewer than two outgoing branches: ${decisionStepIdsWithInsufficientBranches.join(
+          ", "
+        )}.`,
+    });
+  }
+
+  /**
+   * Surface duplicate and unlabeled decision-branch labels for review.
+   */
+  const decisionBranchLabelIssues =
+    findDecisionBranchLabelIssues(
+      normalizedSteps
+    );
+
+  decisionBranchLabelIssues.forEach((issue) => {
+    if (issue.duplicateLabels.length > 0) {
+      normalizedWarnings.push({
+        code:
+          `DUPLICATE_DECISION_BRANCH_LABELS_${issue.stepId}`,
+        message:
+          `Decision step ${issue.stepId} contains duplicate branch labels: ${issue.duplicateLabels.join(
+            ", "
+          )}.`,
+      });
+    }
+
+    if (issue.unlabeledBranchCount > 0) {
+      const branchWord =
+        issue.unlabeledBranchCount === 1
+          ? "branch"
+          : "branches";
+
+      normalizedWarnings.push({
+        code:
+          `UNLABELED_DECISION_BRANCHES_${issue.stepId}`,
+        message:
+          `Decision step ${issue.stepId} contains ${issue.unlabeledBranchCount} unlabeled outgoing ${branchWord}.`,
+      });
+    }
+  });
+
+  
+
   const normalizedActors = normalizeActors(
     parsedResponse.actors
   );
@@ -727,6 +1507,25 @@ const normalizeProcessModelResponse = (parsedResponse) => {
   const encounteredActors = new Set(
     normalizedActors.map((actor) => actor.toLowerCase())
   );
+
+  /**
+   * Surface actors that are listed in the process model but are not assigned to
+   * any normalized process step.
+   */
+  const unusedActors = findUnusedActors(
+    normalizedActors,
+    normalizedSteps
+  );
+
+  if (unusedActors.length > 0) {
+    normalizedWarnings.push({
+      code: "UNUSED_PROCESS_ACTORS",
+      message:
+        `The following process actors are not assigned to any process step: ${unusedActors.join(
+          ", "
+        )}.`,
+    });
+  }
 
   /**
    * Ensure every step owner is represented in the actor collection.
@@ -752,9 +1551,7 @@ const normalizeProcessModelResponse = (parsedResponse) => {
 
     steps: normalizedSteps,
 
-    warnings: normalizeWarnings(
-      parsedResponse.warnings
-    ),
+    warnings: normalizedWarnings,
   };
 };
 
@@ -781,6 +1578,14 @@ module.exports = {
   UNASSIGNED_ACTOR,
   createConnectionsFromLegacyNextStepIds,
   createFallbackStepId,
+  findUnreachableProcessStepIds,
+  findDisconnectedProcessSections,
+  findUnexpectedDeadEndStepIds,
+  findUnreachableEndStepIds,
+  findCircularProcessStepGroups,
+  findDecisionStepIdsWithInsufficientBranches,
+  findDecisionBranchLabelIssues,
+  findUnusedActors,
   normalizeActor,
   normalizeActors,
   normalizeConnection,
