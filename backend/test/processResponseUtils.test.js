@@ -1450,6 +1450,84 @@ test("adds a warning for unused process actors", () => {
 });
 
 // ========================================
+// Process Quality Warning Behavior Tests
+// ========================================
+
+/**
+ * Confirms that process-quality problems are surfaced as warnings instead of
+ * causing an otherwise structurally valid process model to be rejected.
+ */
+test("preserves imperfect process models and returns quality warnings", () => {
+  const normalizedModel = normalizeProcessModelResponse({
+    processName: "Imperfect Review Workflow",
+    actors: [
+      "Operations",
+      "Finance",
+    ],
+    steps: [
+      {
+        id: "STEP-001",
+        type: "start",
+        label: "Begin",
+        owner: "Operations",
+        connections: [
+          {
+            targetStepId: "STEP-002",
+            label: "",
+          },
+        ],
+      },
+      {
+        id: "STEP-002",
+        type: "decision",
+        label: "Request approved?",
+        owner: "Operations",
+        connections: [
+          {
+            targetStepId: "STEP-003",
+            label: "",
+          },
+        ],
+      },
+      {
+        id: "STEP-003",
+        type: "end",
+        label: "Complete",
+        owner: "Operations",
+        connections: [],
+      },
+    ],
+    warnings: [],
+  });
+
+  assert.equal(
+    normalizedModel.steps.length,
+    3
+  );
+
+  assert.deepEqual(
+    normalizedModel.warnings,
+    [
+      {
+        code: "INSUFFICIENT_DECISION_BRANCHES",
+        message:
+          "The following decision process steps have fewer than two outgoing branches: STEP-002.",
+      },
+      {
+        code: "UNLABELED_DECISION_BRANCHES_STEP-002",
+        message:
+          "Decision step STEP-002 contains 1 unlabeled outgoing branch.",
+      },
+      {
+        code: "UNUSED_PROCESS_ACTORS",
+        message:
+          "The following process actors are not assigned to any process step: Finance.",
+      },
+    ]
+  );
+});
+
+// ========================================
 // Unexpected Dead-End Detection Tests
 // ========================================
 
