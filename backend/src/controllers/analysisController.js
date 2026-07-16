@@ -67,6 +67,21 @@ const createAnalyzeRequirementsController = (
           }
         );
 
+      /**
+       * Records a safe completion event for production request correlation.
+       *
+       * Requirements text and generated process content are intentionally
+       * excluded from the log.
+       */
+      console.info(
+        "Business requirements analysis completed.",
+        {
+          event: "business_requirements_analysis_completed",
+          requestId: req.requestId,
+          statusCode: 200,
+        }
+      );
+
       return res.status(200).json(processModel);
     } catch (error) {
       /**

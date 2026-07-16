@@ -139,6 +139,8 @@ test("returns a safe fallback for non-Error service failures", async () => {
 test("returns the process model produced by the analysis service", async () => {
   let receivedRequirements = null;
 
+  const infoLogs = [];
+
   const expectedProcessModel = {
     processName: "Refund Review",
     actors: [
@@ -174,7 +176,20 @@ test("returns the process model produced by the analysis service", async () => {
 
   const res = createMockResponse();
 
-  await controller(req, res);
+  const originalConsoleInfo = console.info;
+
+  console.info = (message, details) => {
+    infoLogs.push({
+      message,
+      details,
+    });
+  };
+
+  try {
+    await controller(req, res);
+  } finally {
+    console.info = originalConsoleInfo;
+  }
 
   assert.equal(
     receivedRequirements,
@@ -183,6 +198,22 @@ test("returns the process model produced by the analysis service", async () => {
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body, expectedProcessModel);
+
+  assert.deepEqual(
+    infoLogs,
+    [
+      {
+        message:
+          "Business requirements analysis completed.",
+        details: {
+          event:
+            "business_requirements_analysis_completed",
+          requestId: undefined,
+          statusCode: 200,
+        },
+      },
+    ]
+  );
 });
 
 /**
