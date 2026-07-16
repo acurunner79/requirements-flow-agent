@@ -49,6 +49,19 @@ const analysisRoutes = require("./routes/analysisRoutes");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+/**
+ * Trusts the first reverse proxy in production.
+ *
+ * Render terminates the public connection before forwarding requests to the
+ * Express application. Trusting one proxy allows Express and the rate limiter
+ * to use the original client IP from the forwarded request headers.
+ *
+ * Local development keeps the default direct-connection behavior.
+ */
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 // ========================================
 // Cross-Origin Request Configuration
 // ========================================

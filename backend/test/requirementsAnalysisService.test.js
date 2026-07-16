@@ -260,6 +260,10 @@ test("propagates provider failures from the AI workflow", async () => {
 /**
  * Confirms that both the provider and response processor run exactly twice.
  */
+
+/**
+ * Confirms that request-scoped metadata is included in corrective-retry logs.
+ */
 test(
   "returns a corrected process model after one response-processing failure",
   async () => {
@@ -268,6 +272,9 @@ test(
 
     const correctionPrompt =
       "Corrective process-analysis prompt";
+
+    const requestId =
+      "req-corrective-recovery-001";
 
     const correctedProcessModel = {
       processName: "Recovered Process",
@@ -371,6 +378,7 @@ test(
 
           return correctedProcessModel;
         },
+
         logger: {
           warn: (message, details) => {
             warningLogs.push({
@@ -397,7 +405,10 @@ test(
 
     const result =
       await createProcessModel(
-        "Analyze this process."
+        "Analyze this process.",
+        {
+          requestId,
+        }
       );
 
     assert.deepEqual(
@@ -416,8 +427,8 @@ test(
     );
 
     /**
-     * Confirms that the retry-started event records only controlled diagnostic
-     * information.
+     * Confirms that the retry-started event records controlled diagnostic
+     * information and the request correlation identifier.
      */
     assert.deepEqual(
       warningLogs,
@@ -428,6 +439,7 @@ test(
           details: {
             event:
               "ai_process_correction_started",
+            requestId,
             errorName: "Error",
             errorMessage:
               "The AI provider returned invalid JSON for the process model.",
@@ -437,7 +449,8 @@ test(
     );
 
     /**
-     * Confirms that successful recovery produces one completion event.
+     * Confirms that successful recovery produces one correlated completion
+     * event.
      */
     assert.deepEqual(
       infoLogs,
@@ -448,6 +461,7 @@ test(
           details: {
             event:
               "ai_process_correction_succeeded",
+            requestId,
           },
         },
       ]
@@ -469,6 +483,9 @@ test(
  *
  * This protects JSON parsing and normalization diagnostics while preventing an
  * unbounded retry loop.
+ *
+ * The request correlation identifier must be included in both the retry-started
+ * and retry-failed events.
  */
 test(
   "propagates response-processing failures after one corrective retry",
@@ -478,6 +495,9 @@ test(
 
     const correctionPrompt =
       "Corrective process-analysis prompt";
+
+    const requestId =
+      "req-corrective-failure-001";
 
     const providerResponses = [
       "invalid response",
@@ -544,6 +564,7 @@ test(
             "The AI provider returned invalid JSON for the process model."
           );
         },
+
         logger: {
           warn: (message, details) => {
             warningLogs.push({
@@ -567,12 +588,14 @@ test(
           },
         },
       });
- 
 
     await assert.rejects(
       () =>
         createProcessModel(
-          "Analyze this process."
+          "Analyze this process.",
+          {
+            requestId,
+          }
         ),
       {
         message:
@@ -584,8 +607,10 @@ test(
       providerCallCount,
       2
     );
+
     /**
-     * Confirms that the initial processing failure starts one corrective retry.
+     * Confirms that the initial processing failure starts one correlated
+     * corrective retry.
      */
     assert.deepEqual(
       warningLogs,
@@ -596,6 +621,7 @@ test(
           details: {
             event:
               "ai_process_correction_started",
+            requestId,
             errorName: "Error",
             errorMessage:
               "The AI provider returned invalid JSON for the process model.",
@@ -613,8 +639,8 @@ test(
     );
 
     /**
-     * Confirms that the final processing failure is recorded once before being
-     * propagated to the caller.
+     * Confirms that the final processing failure is recorded once with the
+     * request correlation identifier before being propagated to the caller.
      */
     assert.deepEqual(
       errorLogs,
@@ -625,6 +651,7 @@ test(
           details: {
             event:
               "ai_process_correction_failed",
+            requestId,
             errorName: "Error",
             errorMessage:
               "The AI provider returned invalid JSON for the process model.",

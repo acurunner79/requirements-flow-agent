@@ -185,6 +185,77 @@ test("returns the process model produced by the analysis service", async () => {
   assert.equal(res.body, expectedProcessModel);
 });
 
+/**
+ * Confirms that the controller forwards its request correlation identifier to
+ * the injected analysis service as request-scoped context.
+ *
+ * The injected service is local and deterministic, so this test cannot contact
+ * an AI provider or consume API tokens.
+ */
+test("passes the request ID to the analysis service", async () => {
+  let receivedRequirements = null;
+  let receivedContext = null;
+
+  const expectedProcessModel = {
+    processName: "Refund Review",
+    actors: [
+      "Customer Service",
+    ],
+    steps: [
+      {
+        id: "STEP-001",
+        type: "end",
+        label: "Review completed",
+        owner: "Customer Service",
+        connections: [],
+      },
+    ],
+    warnings: [],
+  };
+
+  const successfulAnalysisService = async (
+    requirements,
+    context
+  ) => {
+    receivedRequirements = requirements;
+    receivedContext = context;
+
+    return expectedProcessModel;
+  };
+
+  const controller =
+    createAnalyzeRequirementsController(
+      successfulAnalysisService
+    );
+
+  const req = {
+    requestId: "req-controller-correlation-001",
+    body: {
+      requirements: "Review refund requests.",
+    },
+  };
+
+  const res = createMockResponse();
+
+  await controller(req, res);
+
+  assert.equal(
+    receivedRequirements,
+    "Review refund requests."
+  );
+
+  assert.deepEqual(
+    receivedContext,
+    {
+      requestId:
+        "req-controller-correlation-001",
+    }
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body, expectedProcessModel);
+});
+
 // ========================================
 // Controller Input Validation Tests
 // ========================================

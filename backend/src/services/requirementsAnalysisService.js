@@ -171,7 +171,12 @@ const createMockProcessModel = (requirements) => {
  * @param {(message: string, details?: object) => void} dependencies.logger.error
  * Records a failed corrective attempt.
  *
- * @returns {(requirements: string) => Promise<object>}
+ * @returns {
+ *   (
+ *     requirements: string,
+ *     context?: { requestId?: string }
+ *   ) => Promise<object>
+ * }
  * Configured AI process-analysis function.
  */
 const createAiProcessModelFactory = ({
@@ -181,7 +186,12 @@ const createAiProcessModelFactory = ({
   responseProcessor,
   logger = console,
 }) => {
-  return async (requirements) => {
+  return async (
+    requirements,
+    context = {}
+  ) => {
+    const { requestId } = context;
+
     /**
      * Build the complete provider-neutral prompt from the validated business
      * requirements.
@@ -218,6 +228,7 @@ const createAiProcessModelFactory = ({
         "AI process response required corrective retry.",
         {
           event: "ai_process_correction_started",
+          requestId,
           errorName:
             processingError instanceof Error
               ? processingError.name
@@ -264,6 +275,7 @@ const createAiProcessModelFactory = ({
           "AI process response recovered after corrective retry.",
           {
             event: "ai_process_correction_succeeded",
+            requestId,
           }
         );
 
@@ -277,6 +289,7 @@ const createAiProcessModelFactory = ({
           "AI process corrective retry failed.",
           {
             event: "ai_process_correction_failed",
+            requestId,
             errorName:
               correctionError instanceof Error
                 ? correctionError.name
@@ -334,20 +347,29 @@ const createAiProcessModel =
  * @param {string} requirements
  * Validated business-requirements text supplied by the user.
  *
+ * @param {{ requestId?: string }} [context]
+ * Optional request-scoped metadata used for structured logging.
+ *
  * @returns {Promise<object>}
  * Structured process model ready to return to the client.
  *
  * @throws {Error}
  * Throws when the analysis mode is invalid or the selected workflow fails.
  */
-const analyzeBusinessRequirements = async (requirements) => {
+const analyzeBusinessRequirements = async (
+  requirements,
+  context = {}
+) => {
   validateAnalysisMode(configuredAnalysisMode);
 
   if (configuredAnalysisMode === ANALYSIS_MODES.MOCK) {
     return createMockProcessModel(requirements);
   }
 
-  return createAiProcessModel(requirements);
+  return createAiProcessModel(
+    requirements,
+    context
+  );
 };
 
 module.exports = {

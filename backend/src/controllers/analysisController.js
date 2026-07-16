@@ -21,9 +21,15 @@ const {
  * service while allowing automated tests to provide a deterministic failing
  * service without making an AI-provider request.
  *
- * @param {(requirements: string) => Promise<object>} analysisService
+ * @param {(
+ *   requirements: string,
+ *   context?: { requestId?: string }
+ * ) => Promise<object>} analysisService
  * Service function responsible for converting validated requirements into a
  * structured process model.
+ *
+ * The optional context carries request-scoped diagnostic information without
+ * including the submitted business requirements in logs.
  *
  * @returns {(
  *   req: import("express").Request,
@@ -54,7 +60,12 @@ const createAnalyzeRequirementsController = (
        * Delegate the complete analysis workflow to the injected service.
        */
       const processModel =
-        await analysisService(requirements);
+        await analysisService(
+          requirements,
+          {
+            requestId: req.requestId,
+          }
+        );
 
       return res.status(200).json(processModel);
     } catch (error) {
@@ -63,8 +74,19 @@ const createAnalyzeRequirementsController = (
        * requirements text or provider credentials to the log message.
        */
       console.error(
-        "Business requirements analysis failed:",
-        error
+        "Business requirements analysis failed.",
+        {
+          event: "business_requirements_analysis_failed",
+          requestId: req.requestId,
+          errorName:
+            error instanceof Error
+              ? error.name
+              : "UnknownError",
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Unknown analysis failure.",
+        }
       );
 
       /**
