@@ -71,6 +71,8 @@ const PROCESS_STEP_TYPES = [
  * Complete process-step collection used to populate connection targets.
  * @param {number} props.stepNumber
  * One-based display position for the current process step.
+ * @param {Array<object>} props.validationIssues
+ * Validation errors and warnings associated with this process step.
  * @param {(stepId: string, updates: object) => void} props.onUpdateStep
  * Applies approved metadata changes to the parent process model.
  * @param {(stepId: string, connections: Array<object>) => void}
@@ -82,6 +84,7 @@ const ProcessStepCard = ({
   step,
   availableSteps,
   stepNumber,
+  validationIssues,
   onUpdateStep,
   onUpdateConnections,
 }) => {
@@ -103,15 +106,21 @@ const ProcessStepCard = ({
   const formattedStepNumber = String(stepNumber).padStart(2, "0");
 
   /**
- * Provides the rich outgoing connections used by the connection editor.
- *
- * `connections` is now the authoritative process-path structure throughout the
- * frontend. A defensive empty-array fallback prevents rendering failures if an
- * invalid or incomplete step reaches the component.
- */
+   * Provides the rich outgoing connections used by the connection editor.
+   *
+   * `connections` is now the authoritative process-path structure throughout the
+   * frontend. A defensive empty-array fallback prevents rendering failures if an
+   * invalid or incomplete step reaches the component.
+   */
   const stepConnections = Array.isArray(step.connections)
     ? step.connections
     : [];
+
+  /**
+   * Indicates whether the current step has any validation problems that should
+   * be highlighted directly in the editor.
+   */
+  const hasValidationIssues = validationIssues.length > 0;
 
   /**
    * Opens the metadata edit interface and synchronizes draft fields with the
@@ -246,7 +255,16 @@ const ProcessStepCard = ({
   };
 
   return (
-    <li className="process-step-card">
+    <li
+      className={[
+        "process-step-card",
+        hasValidationIssues
+          ? "process-step-card--validation-issues"
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div
         className="process-step-card__number"
         aria-label={`Process step ${stepNumber}`}
@@ -391,6 +409,37 @@ const ProcessStepCard = ({
                 <dd>{stepConnections.length}</dd>
               </div>
             </dl>
+
+            {hasValidationIssues && (
+              <section
+                className="process-step-card__validation-issues"
+                aria-label={`Validation issues for ${step.label}`}
+              >
+                <div className="process-step-card__validation-heading">
+                  <strong>
+                    Validation
+                  </strong>
+
+                  <span>
+                    {validationIssues.length}
+                  </span>
+                </div>
+
+                <ul className="process-step-card__validation-list">
+                  {validationIssues.map((issue, index) => (
+                    <li
+                      key={`${issue.code}-${index}`}
+                      className={[
+                        "process-step-card__validation-item",
+                        `process-step-card__validation-item--${issue.severity}`,
+                      ].join(" ")}
+                    >
+                      {issue.message}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {step.type !== "end" && (
               <ProcessConnectionEditor

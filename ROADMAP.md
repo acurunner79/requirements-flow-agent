@@ -1,13 +1,10 @@
 # Requirements Flow Agent Roadmap
 
-## Current Status
-
-- **Current phase:** Phase 2 — Process quality and validation
-- **Current item:** Detect circular paths where they appear unintended
-- **Last completed item:** Verify that end steps are reachable
-- **Backend test status:** 75 passed, 0 failed
-- **Working method:** Complete one controlled step at a time and run token-free tests after each change
-
+- **Current phase:** Phase 3 — Diagram and visualization
+- **Current item:** Improve automatic flow layout
+- **Last completed item:** Surface validation problems in the editor
+- **Backend test status:** 84 passed, 0 failed
+- **Frontend test status:** 63 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -43,8 +40,8 @@
 - [x] Validate decision steps for sufficient branches.
 - [x] Detect duplicate or ambiguous branch labels.
 - [x] Detect unused actors.
-- [ ] Add process-quality warnings rather than rejecting every imperfect model.
-- [ ] Surface validation problems in the editor and diagram.
+- [x] Add process-quality warnings rather than rejecting every imperfect model.
+- [x] Surface validation problems in the editor and diagram.
 
 ---
 

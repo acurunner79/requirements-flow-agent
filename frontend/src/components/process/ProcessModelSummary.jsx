@@ -134,16 +134,29 @@ const ProcessModelSummary = ({
         </div>
 
         <ol className="process-model-summary__steps">
-          {processModel.steps.map((step, index) => (
-            <ProcessStepCard
-              key={step.id}
-              step={step}
-              availableSteps={processModel.steps}
-              stepNumber={index + 1}
-              onUpdateStep={onUpdateStep}
-              onUpdateConnections={onUpdateConnections}
-            />
-          ))}
+          {processModel.steps.map((step, index) => {
+            /**
+             * Associate validation problems with the process step they affect.
+             *
+             * Process-level issues do not contain a step ID and remain visible only in
+             * the main validation summary.
+             */
+            const stepValidationIssues = validationIssues.filter(
+              (issue) => issue.stepId === step.id
+            );
+
+            return (
+              <ProcessStepCard
+                key={step.id}
+                step={step}
+                availableSteps={processModel.steps}
+                stepNumber={index + 1}
+                validationIssues={stepValidationIssues}
+                onUpdateStep={onUpdateStep}
+                onUpdateConnections={onUpdateConnections}
+              />
+            );
+          })}
         </ol>
       </section>
 

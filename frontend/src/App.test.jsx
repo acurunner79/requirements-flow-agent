@@ -15,6 +15,7 @@ import {
   cleanup,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 
 import userEvent from "@testing-library/user-event";
@@ -202,6 +203,94 @@ describe("App requirements workflow", () => {
       )
     ).not.toBeInTheDocument();
   });
+
+/**
+ * Confirms that a validation problem associated with a specific process step is
+ * displayed directly inside that step's editor card.
+ *
+ * The decision step intentionally contains only one outgoing branch, which
+ * produces a non-blocking validation warning.
+ */
+test("surfaces step-specific validation warnings in the affected editor card", async () => {
+  const user = userEvent.setup();
+
+  analyzeRequirementsMock.mockResolvedValue({
+    processName: "Approval Workflow",
+    actors: [
+      "Requester",
+      "Manager",
+    ],
+    steps: [
+      {
+        id: "step-1",
+        label: "Submit request",
+        description: "The requester submits a request.",
+        owner: "Requester",
+        type: "start",
+        connections: [
+          {
+            targetStepId: "step-2",
+            label: "",
+          },
+        ],
+      },
+      {
+        id: "step-2",
+        label: "Approve request?",
+        description: "The manager reviews the request.",
+        owner: "Manager",
+        type: "decision",
+        connections: [
+          {
+            targetStepId: "step-3",
+            label: "Approved",
+          },
+        ],
+      },
+      {
+        id: "step-3",
+        label: "Complete request",
+        description: "The request is completed.",
+        owner: "Manager",
+        type: "end",
+        connections: [],
+      },
+    ],
+    warnings: [],
+  });
+
+  render(<App />);
+
+  await user.type(
+    screen.getByLabelText("Business Requirements"),
+    "A requester submits a request for manager approval."
+  );
+
+  await user.click(
+    screen.getByRole("button", {
+      name: "Analyze Requirements",
+    })
+  );
+
+  const decisionStepLabel = await screen.findByText(
+    "Approve request?",
+    {
+      selector: ".process-step-card__label",
+    }
+  );
+
+const decisionStepCard = decisionStepLabel.closest(
+  ".process-step-card"
+);
+
+  expect(decisionStepCard).not.toBeNull();
+
+  expect(
+    within(decisionStepCard).getByText(
+      /should have at least two outgoing paths/i
+    )
+  ).toBeInTheDocument();
+});
 
   /**
  * Confirms that the submit control enters a disabled loading state while an

@@ -2011,6 +2011,79 @@ ul {
 }
 
 /* ========================================
+   Process Step Validation Issues
+   ======================================== */
+
+/**
+ * Step-specific validation issues are shown directly inside the affected card
+ * so users do not have to match a general summary item back to the editor.
+ *
+ * Warning and error treatments remain visually distinct while preserving the
+ * existing neutral process-card layout.
+ */
+.process-step-card--validation-issues {
+  border-color: #d8c7a2;
+  border-left-color: var(--color-warning);
+}
+
+.process-step-card__validation-issues {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background-color: var(--color-warning-background);
+  border-left: 4px solid var(--color-warning);
+}
+
+.process-step-card__validation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.process-step-card__validation-heading strong {
+  color: var(--color-text-primary);
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.process-step-card__validation-heading span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  background-color: var(--color-warning);
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.process-step-card__validation-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.process-step-card__validation-item {
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.process-step-card__validation-item--error {
+  color: var(--color-error);
+}
+
+.process-step-card__validation-item--warning {
+  color: var(--color-warning);
+}
+
+/* ========================================
    Process Step Editing Interface
    ======================================== */
 
