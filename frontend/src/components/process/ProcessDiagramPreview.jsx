@@ -52,6 +52,33 @@ const ProcessDiagramPreview = ({
   ] = useState([]);
 
   /**
+   * Track the current diagram zoom level as a percentage-based scale value.
+   *
+   * The initial value of 1 represents 100% zoom.
+   */
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  /**
+   * Store the diagram translation offset used for drag-based panning.
+   */
+  const [panOffset, setPanOffset] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  /**
+   * Track the active drag operation without forcing unnecessary renders for
+   * every pointer coordinate captured during the interaction.
+   */
+  const dragStateRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    initialPanX: 0,
+    initialPanY: 0,
+  });
+
+  /**
    * Recalculate the diagram layout only when the process model changes.
    *
    * Stable layout arrays prevent connector measurement effects from running
@@ -224,6 +251,78 @@ const ProcessDiagramPreview = ({
     layout.nodes,
   ]);
 
+  /**
+   * Increase the diagram scale in controlled 10% increments.
+   */
+  const handleZoomIn = () => {
+    setZoomLevel((currentZoomLevel) => {
+      return Math.min(currentZoomLevel + 0.1, 2);
+    });
+  };
+
+  /**
+   * Decrease the diagram scale in controlled 10% increments.
+   */
+  const handleZoomOut = () => {
+    setZoomLevel((currentZoomLevel) => {
+      return Math.max(currentZoomLevel - 0.1, 0.5);
+    });
+  };
+
+  /**
+   * Restore the diagram to its default scale.
+   */
+    /**
+   * Restore the diagram to its default scale and centered translation.
+   */
+  const handleResetView = () => {
+    setZoomLevel(1);
+    setPanOffset({
+      x: 0,
+      y: 0,
+    });
+  };
+
+    /**
+   * Begin tracking a mouse-driven pan interaction.
+   */
+  const handlePanStart = (event) => {
+    dragStateRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      initialPanX: panOffset.x,
+      initialPanY: panOffset.y,
+    };
+  };
+
+  /**
+   * Translate the diagram by the distance moved since the drag began.
+   */
+  const handlePanMove = (event) => {
+    if (!dragStateRef.current.isDragging) {
+      return;
+    }
+
+    setPanOffset({
+      x:
+        dragStateRef.current.initialPanX +
+        event.clientX -
+        dragStateRef.current.startX,
+      y:
+        dragStateRef.current.initialPanY +
+        event.clientY -
+        dragStateRef.current.startY,
+    });
+  };
+
+  /**
+   * End the current drag interaction.
+   */
+  const handlePanEnd = () => {
+    dragStateRef.current.isDragging = false;
+  };
+
   return (
     <section
       className="process-diagram-preview"
@@ -239,15 +338,74 @@ const ProcessDiagramPreview = ({
             Process Flow
           </h2>
         </div>
+
+        {/**
+         * Provide explicit viewport controls so keyboard and assistive-
+         * technology users can adjust the diagram without gestures.
+         */}
+        <div
+          className="process-diagram-preview__controls"
+          aria-label="Diagram view controls"
+        >
+          <button
+            type="button"
+            className="process-diagram-preview__control"
+            aria-label="Zoom out"
+            onClick={handleZoomOut}
+          >
+            −
+          </button>
+
+          <span
+            className="process-diagram-preview__zoom-level"
+            aria-live="polite"
+          >
+            {Math.round(zoomLevel * 100)}%
+          </span>
+
+          <button
+            type="button"
+            className="process-diagram-preview__control"
+            aria-label="Zoom in"
+            onClick={handleZoomIn}
+          >
+            +
+          </button>
+
+          <button
+            type="button"
+            className="process-diagram-preview__control process-diagram-preview__control--reset"
+            aria-label="Reset diagram view"
+            onClick={handleResetView}
+          >
+            Reset
+          </button>
+        </div>
       </header>
 
+      {/**
+       * The viewport remains stationary while the inner diagram content is scaled
+       * and, in a later step, translated during panning.
+       */}
       <div
-        ref={surfaceRef}
-        className="process-diagram-preview__surface"
-        style={{
-          "--process-diagram-column-count": columnCount,
-        }}
+        className="process-diagram-preview__viewport"
+        data-testid="process-diagram-viewport"
+        onMouseDown={handlePanStart}
+        onMouseMove={handlePanMove}
+        onMouseUp={handlePanEnd}
+        onMouseLeave={handlePanEnd}
       >
+        <div
+          ref={surfaceRef}
+          className="process-diagram-preview__surface"
+          data-testid="process-diagram-content"
+          style={{
+            "--process-diagram-column-count": columnCount,
+            transform:
+              `translate(${panOffset.x}px, ${panOffset.y}px) ` +
+              `scale(${zoomLevel})`,
+          }}
+        >
         {/**
          * Render measured connector paths in an SVG overlay.
          *
@@ -397,6 +555,7 @@ const ProcessDiagramPreview = ({
           );
         })}
       </div>
+    </div>
     </section>
   );
 };

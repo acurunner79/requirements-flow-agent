@@ -10,12 +10,14 @@ import {
 } from "vitest";
 
 import {
+  fireEvent,
   cleanup,
   render,
   screen,
 } from "@testing-library/react";
 
 import "@testing-library/jest-dom/vitest";
+import userEvent from "@testing-library/user-event";
 
 import ProcessDiagramPreview from "./ProcessDiagramPreview";
 
@@ -259,5 +261,277 @@ describe("ProcessDiagramPreview", () => {
       "marker-end",
       "url(#process-diagram-arrowhead)"
     );
+  });
+
+  /**
+   * Confirms that the diagram provides the basic controls users need to adjust
+   * the viewport without relying exclusively on mouse or trackpad gestures.
+   */
+  test("renders diagram zoom controls", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    /**
+     * Accessible labels allow the controls to work with screen readers while
+     * also giving the tests stable, user-focused selectors.
+     */
+    expect(
+      screen.getByRole("button", {
+        name: "Zoom in",
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Zoom out",
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Reset diagram view",
+      })
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * Confirms that the diagram zoom controls update the visible zoom level and
+   * that the reset control restores the default 100% view.
+   */
+  test("updates and resets the diagram zoom level", async () => {
+    const user = userEvent.setup();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    expect(
+      screen.getByText("100%")
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Zoom in",
+      })
+    );
+
+    expect(
+      screen.getByText("110%")
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Zoom out",
+      })
+    );
+
+    expect(
+      screen.getByText("100%")
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Zoom in",
+      })
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Reset diagram view",
+      })
+    );
+
+    expect(
+      screen.getByText("100%")
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * Confirms that changing the zoom level applies a matching scale transform to
+   * the diagram content rather than updating only the visible percentage label.
+   */
+  test("applies the selected zoom level to the diagram content", async () => {
+    const user = userEvent.setup();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    const diagramContent = screen.getByTestId(
+      "process-diagram-content"
+    );
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1)",
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Zoom in",
+      })
+    );
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1.1)",
+    });
+  });
+
+  /**
+   * Confirms that dragging within the diagram viewport translates the diagram
+   * content, allowing users to navigate workflows larger than the visible area.
+   */
+  test("pans the diagram content by dragging the viewport", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    const diagramViewport = screen.getByTestId(
+      "process-diagram-viewport"
+    );
+
+    const diagramContent = screen.getByTestId(
+      "process-diagram-content"
+    );
+
+    fireEvent.mouseDown(diagramViewport, {
+      clientX: 100,
+      clientY: 100,
+    });
+
+    fireEvent.mouseMove(diagramViewport, {
+      clientX: 140,
+      clientY: 125,
+    });
+
+    fireEvent.mouseUp(diagramViewport);
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(40px, 25px) scale(1)",
+    });
   });
 });

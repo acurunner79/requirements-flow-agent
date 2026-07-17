@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
 - **Current phase:** Phase 3 — Diagram and visualization
-- **Current item:** Add arrowheads to process connectors
-- **Last completed item:** Add arrowheads to process connectors
+- **Current item:** Add fit-to-screen
+- **Last completed item:** Add pan and zoom
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 75 passed, 0 failed
+- **Frontend test status:** 79 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -54,7 +54,7 @@
 - [x] Draw process connectors.
 - [x] Render branch labels directly on connectors.
 - [x] Improve connector routing and arrowheads.
-- [ ] Add pan and zoom.
+- [x] Add pan and zoom.
 - [ ] Add fit-to-screen.
 - [ ] Improve navigation for large workflows.
 - [ ] Synchronize diagram selection with the editor.
