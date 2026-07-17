@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
 - **Current phase:** Phase 3 — Diagram and visualization
-- **Current item:** Improve navigation for large workflows
-- **Last completed item:** Add fit-to-screen
+- **Current item:** Synchronize diagram selection with the editor
+- **Last completed item:** Improve navigation for large workflows
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 81 passed, 0 failed
+- **Frontend test status:** 83 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -56,7 +56,7 @@
 - [x] Improve connector routing and arrowheads.
 - [x] Add pan and zoom.
 - [x] Add fit-to-screen.
-- [ ] Improve navigation for large workflows.
+- [x] Improve navigation for large workflows.
 - [ ] Synchronize diagram selection with the editor.
 - [ ] Highlight warnings and validation problems visually.
 

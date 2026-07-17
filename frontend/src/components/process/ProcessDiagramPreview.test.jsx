@@ -686,4 +686,152 @@ describe("ProcessDiagramPreview", () => {
       screen.getByText("50%")
     ).toBeInTheDocument();
   });
+
+  /**
+   * Confirms that large workflows provide accessible directional controls for
+   * moving around the diagram without requiring mouse-drag gestures.
+   */
+  test("renders directional diagram navigation controls", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Move diagram up",
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Move diagram down",
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Move diagram left",
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Move diagram right",
+      })
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * Confirms that the directional navigation controls move the diagram by the
+   * configured pan distance in each direction.
+   */
+  test("moves the diagram with directional navigation controls", async () => {
+    const user = userEvent.setup();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    const diagramContent = screen.getByTestId(
+      "process-diagram-content"
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Move diagram right",
+      })
+    );
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(80px, 0px) scale(1)",
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Move diagram down",
+      })
+    );
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(80px, 80px) scale(1)",
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Move diagram left",
+      })
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Move diagram up",
+      })
+    );
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1)",
+    });
+  });
 });

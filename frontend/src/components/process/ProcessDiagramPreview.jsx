@@ -73,6 +73,12 @@ const ProcessDiagramPreview = ({
     y: 0,
   });
 
+    /**
+   * Move the diagram by a consistent distance when users choose one of the
+   * directional navigation controls.
+   */
+  const PAN_STEP = 80;
+
   /**
    * Track the active drag operation without forcing unnecessary renders for
    * every pointer coordinate captured during the interaction.
@@ -379,6 +385,54 @@ const ProcessDiagramPreview = ({
     });
   };
 
+  /**
+   * Move the diagram upward within the viewport.
+   */
+  const handleMoveUp = () => {
+    setPanOffset((currentPanOffset) => {
+      return {
+        ...currentPanOffset,
+        y: currentPanOffset.y - PAN_STEP,
+      };
+    });
+  };
+
+  /**
+   * Move the diagram downward within the viewport.
+   */
+  const handleMoveDown = () => {
+    setPanOffset((currentPanOffset) => {
+      return {
+        ...currentPanOffset,
+        y: currentPanOffset.y + PAN_STEP,
+      };
+    });
+  };
+
+  /**
+   * Move the diagram left within the viewport.
+   */
+  const handleMoveLeft = () => {
+    setPanOffset((currentPanOffset) => {
+      return {
+        ...currentPanOffset,
+        x: currentPanOffset.x - PAN_STEP,
+      };
+    });
+  };
+
+  /**
+   * Move the diagram right within the viewport.
+   */
+  const handleMoveRight = () => {
+    setPanOffset((currentPanOffset) => {
+      return {
+        ...currentPanOffset,
+        x: currentPanOffset.x + PAN_STEP,
+      };
+    });
+  };
+
   return (
     <section
       className="process-diagram-preview"
@@ -403,6 +457,51 @@ const ProcessDiagramPreview = ({
           className="process-diagram-preview__controls"
           aria-label="Diagram view controls"
         >
+          {/**
+           * Provide directional navigation for large workflows so users can
+           * move around the diagram without relying on drag gestures.
+           */}
+          <div
+            className="process-diagram-preview__navigation-controls"
+            aria-label="Diagram navigation controls"
+          >
+            <button
+              type="button"
+              className="process-diagram-preview__control"
+              aria-label="Move diagram up"
+              onClick={handleMoveUp}
+            >
+              ↑
+            </button>
+
+            <button
+              type="button"
+              className="process-diagram-preview__control"
+              aria-label="Move diagram down"
+              onClick={handleMoveDown}
+            >
+              ↓
+            </button>
+
+            <button
+              type="button"
+              className="process-diagram-preview__control"
+              aria-label="Move diagram left"
+              onClick={handleMoveLeft}
+            >
+              ←
+            </button>
+
+            <button
+              type="button"
+              className="process-diagram-preview__control"
+              aria-label="Move diagram right"
+              onClick={handleMoveRight}
+            >
+              →
+            </button>
+          </div>
+
           <button
             type="button"
             className="process-diagram-preview__control"
