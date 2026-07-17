@@ -1494,6 +1494,40 @@ ul {
 }
 
 /* ========================================
+   Process Diagram Validation States
+======================================== */
+
+/*
+ * Highlight blocking validation errors with a stronger border and inset ring
+ * so they remain visible alongside the normal selected-node state.
+ */
+.process-diagram-preview__node--validation-error {
+  border-color: var(--color-danger);
+  box-shadow:
+    0 0 0 2px color-mix(
+      in srgb,
+      var(--color-danger) 28%,
+      transparent
+    ),
+    var(--shadow-sm);
+}
+
+/*
+ * Highlight non-blocking warnings separately from errors so users can
+ * distinguish review concerns from issues that prevent export.
+ */
+.process-diagram-preview__node--validation-warning {
+  border-color: var(--color-warning);
+  box-shadow:
+    0 0 0 2px color-mix(
+      in srgb,
+      var(--color-warning) 28%,
+      transparent
+    ),
+    var(--shadow-sm);
+}
+
+/* ========================================
    Responsive Process Diagram Preview
    ======================================== */
 

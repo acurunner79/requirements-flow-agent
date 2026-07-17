@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
-- **Current phase:** Phase 3 — Diagram and visualization
-- **Current item:** Highlight warnings and validation problems visually
-- **Last completed item:** Synchronize diagram selection with the editor
+- **Current phase:** Phase 4 — Editing and review workflow
+- **Current item:** Add drag-and-drop step reordering
+- **Last completed item:** Highlight warnings and validation problems visually
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 88 passed, 0 failed
+- **Frontend test status:** 90 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -58,7 +58,7 @@
 - [x] Add fit-to-screen.
 - [x] Improve navigation for large workflows.
 - [x] Synchronize diagram selection with the editor.
-- [ ] Highlight warnings and validation problems visually.
+- [x] Highlight warnings and validation problems visually.
 
 ---
 

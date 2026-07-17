@@ -162,6 +162,7 @@ const ProcessModelSummary = ({
        */}
       <ProcessDiagramPreview
         processModel={processModel}
+        validationIssues={validationIssues}
         selectedStepId={selectedStepId}
         onStepSelect={setSelectedStepId}
       />

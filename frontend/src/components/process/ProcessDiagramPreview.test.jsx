@@ -997,4 +997,122 @@ describe("ProcessDiagramPreview", () => {
       "process-diagram-preview__node--selected"
     );
   });
+
+  /**
+   * Confirms that process steps with validation problems receive a dedicated
+   * visual state in the diagram.
+   */
+  test("highlights process steps with validation issues", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    const validationIssues = [
+      {
+        code: "MISSING_STEP_DESCRIPTION",
+        severity: "error",
+        stepId: "step-1",
+        message: "Enter a step description.",
+      },
+    ];
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+        validationIssues={validationIssues}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Select Submit request",
+      })
+    ).toHaveClass(
+      "process-diagram-preview__node--validation-error"
+    );
+  });
+
+  /**
+   * Confirms that non-blocking validation warnings receive their own visual
+   * state instead of being styled like blocking errors.
+   */
+  test("highlights process steps with validation warnings", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    const validationIssues = [
+      {
+        code: "UNUSED_ACTOR",
+        severity: "warning",
+        stepId: "step-1",
+        message: "Review this process step.",
+      },
+    ];
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+        validationIssues={validationIssues}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Select Submit request",
+      })
+    ).toHaveClass(
+      "process-diagram-preview__node--validation-warning"
+    );
+  });
 });

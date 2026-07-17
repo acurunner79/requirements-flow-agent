@@ -33,6 +33,7 @@ import { createProcessDiagramLayout } from "../../utils/processDiagramLayoutUtil
  */
 const ProcessDiagramPreview = ({
   processModel,
+  validationIssues = [],
   selectedStepId,
   onStepSelect,
 }) => {
@@ -59,6 +60,36 @@ const ProcessDiagramPreview = ({
     connectorPaths,
     setConnectorPaths,
   ] = useState([]);
+
+  /**
+   * Group validation issues by process step so diagram nodes can surface the
+   * most important visual state without repeatedly filtering the full issue
+   * collection during rendering.
+   */
+  const validationSeverityByStepId = useMemo(() => {
+    const severityByStepId = new Map();
+
+    validationIssues.forEach((issue) => {
+      if (!issue?.stepId) {
+        return;
+      }
+
+      const currentSeverity =
+        severityByStepId.get(issue.stepId);
+
+      if (
+        issue.severity === "error" ||
+        !currentSeverity
+      ) {
+        severityByStepId.set(
+          issue.stepId,
+          issue.severity
+        );
+      }
+    });
+
+    return severityByStepId;
+  }, [validationIssues]);
 
   /**
    * Track the current diagram zoom level as a percentage-based scale value.
@@ -679,6 +710,13 @@ const ProcessDiagramPreview = ({
                     return null;
                   }
 
+                  /**
+                   * Look up the highest validation severity associated with this process step
+                   * so the node can receive the correct visual warning state.
+                   */
+                  const validationSeverity =
+                    validationSeverityByStepId.get(node.stepId);
+
                   return (
                     <article
                       key={node.stepId}
@@ -724,9 +762,16 @@ const ProcessDiagramPreview = ({
                         selectedStepId === node.stepId
                           ? "process-diagram-preview__node--selected"
                           : "",
+                        validationSeverity === "error"
+                          ? "process-diagram-preview__node--validation-error"
+                          : "",
+                        validationSeverity === "warning"
+                          ? "process-diagram-preview__node--validation-warning"
+                          : "",
                       ]
                         .filter(Boolean)
-                        .join(" ")}
+                        .join(" ")
+                      }
                       data-column={node.column}
                       data-row={node.row}
                       style={{
