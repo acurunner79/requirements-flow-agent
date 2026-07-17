@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
 - **Current phase:** Phase 3 — Diagram and visualization
-- **Current item:** Add fit-to-screen
-- **Last completed item:** Add pan and zoom
+- **Current item:** Improve navigation for large workflows
+- **Last completed item:** Add fit-to-screen
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 79 passed, 0 failed
+- **Frontend test status:** 81 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -55,7 +55,7 @@
 - [x] Render branch labels directly on connectors.
 - [x] Improve connector routing and arrowheads.
 - [x] Add pan and zoom.
-- [ ] Add fit-to-screen.
+- [x] Add fit-to-screen.
 - [ ] Improve navigation for large workflows.
 - [ ] Synchronize diagram selection with the editor.
 - [ ] Highlight warnings and validation problems visually.

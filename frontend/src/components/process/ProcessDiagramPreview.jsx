@@ -46,6 +46,13 @@ const ProcessDiagramPreview = ({
     new Map()
   );
 
+  /**
+   * Reference the stationary viewport so fit-to-screen calculations can compare
+   * its available space with the full diagram dimensions.
+   */
+  const viewportRef = useRef(null);
+
+
   const [
     connectorPaths,
     setConnectorPaths,
@@ -135,6 +142,7 @@ const ProcessDiagramPreview = ({
       return undefined;
     }
 
+   
     const calculateConnectorPaths = () => {
       const surfaceBounds =
         surfaceElement.getBoundingClientRect();
@@ -323,6 +331,54 @@ const ProcessDiagramPreview = ({
     dragStateRef.current.isDragging = false;
   };
 
+  /**
+   * Scale the complete diagram so it fits within the visible viewport.
+   *
+   * The calculation preserves the diagram aspect ratio by using the smaller of
+   * the horizontal and vertical scale values. Existing pan offsets are cleared
+   * so the fitted diagram begins from the viewport origin.
+   */
+  const handleFitToScreen = () => {
+    const viewportElement = viewportRef.current;
+    const diagramElement = surfaceRef.current;
+
+    if (!viewportElement || !diagramElement) {
+      return;
+    }
+
+    const viewportWidth = viewportElement.clientWidth;
+    const viewportHeight = viewportElement.clientHeight;
+    const diagramWidth = diagramElement.scrollWidth;
+    const diagramHeight = diagramElement.scrollHeight;
+
+    /**
+     * Ignore incomplete layout measurements to avoid dividing by zero or
+     * applying an unusable transform during initial rendering.
+     */
+    if (
+      viewportWidth <= 0 ||
+      viewportHeight <= 0 ||
+      diagramWidth <= 0 ||
+      diagramHeight <= 0
+    ) {
+      return;
+    }
+
+    const horizontalScale = viewportWidth / diagramWidth;
+    const verticalScale = viewportHeight / diagramHeight;
+    const fittedScale = Math.min(
+      horizontalScale,
+      verticalScale,
+      1
+    );
+
+    setZoomLevel(fittedScale);
+    setPanOffset({
+      x: 0,
+      y: 0,
+    });
+  };
+
   return (
     <section
       className="process-diagram-preview"
@@ -372,6 +428,19 @@ const ProcessDiagramPreview = ({
             +
           </button>
 
+          {/**
+           * Automatically resize and reposition the diagram so the complete
+           * workflow can be viewed within the current viewport.
+           */}
+          <button
+            type="button"
+            className="process-diagram-preview__control process-diagram-preview__control--fit"
+            aria-label="Fit diagram to screen"
+            onClick={handleFitToScreen}
+          >
+            Fit
+          </button>
+
           <button
             type="button"
             className="process-diagram-preview__control process-diagram-preview__control--reset"
@@ -388,6 +457,7 @@ const ProcessDiagramPreview = ({
        * and, in a later step, translated during panning.
        */}
       <div
+        ref={viewportRef}
         className="process-diagram-preview__viewport"
         data-testid="process-diagram-viewport"
         onMouseDown={handlePanStart}

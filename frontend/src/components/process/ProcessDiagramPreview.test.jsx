@@ -534,4 +534,156 @@ describe("ProcessDiagramPreview", () => {
       transform: "translate(40px, 25px) scale(1)",
     });
   });
+
+  /**
+   * Confirms that users can request an automatic fit-to-screen view from the
+   * same accessible control group used for zooming and resetting the diagram.
+   */
+  test("renders a fit-to-screen control", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Fit diagram to screen",
+      })
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * Confirms that the fit-to-screen control calculates a scale that keeps the
+   * complete diagram within the available viewport and resets prior panning.
+   */
+  test("fits the diagram content within the viewport", async () => {
+    const user = userEvent.setup();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    const diagramViewport = screen.getByTestId(
+      "process-diagram-viewport"
+    );
+
+    const diagramContent = screen.getByTestId(
+      "process-diagram-content"
+    );
+
+    /**
+     * JSDOM does not calculate real layout dimensions, so define stable
+     * viewport and content measurements for this behavior test.
+     */
+    Object.defineProperty(
+      diagramViewport,
+      "clientWidth",
+      {
+        configurable: true,
+        value: 600,
+      }
+    );
+
+    Object.defineProperty(
+      diagramViewport,
+      "clientHeight",
+      {
+        configurable: true,
+        value: 400,
+      }
+    );
+
+    Object.defineProperty(
+      diagramContent,
+      "scrollWidth",
+      {
+        configurable: true,
+        value: 1200,
+      }
+    );
+
+    Object.defineProperty(
+      diagramContent,
+      "scrollHeight",
+      {
+        configurable: true,
+        value: 800,
+      }
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Fit diagram to screen",
+      })
+    );
+
+    expect(diagramContent).toHaveStyle({
+      transform: "translate(0px, 0px) scale(0.5)",
+    });
+
+    expect(
+      screen.getByText("50%")
+    ).toBeInTheDocument();
+  });
 });
