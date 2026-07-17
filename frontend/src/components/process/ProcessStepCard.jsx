@@ -54,6 +54,10 @@ const PROCESS_STEP_TYPES = [
  * - The card can be reused in future process-review layouts
  * - Process data transformations remain outside the presentation component
  *
+ * @param {boolean} props.isSelected
+ * Indicates whether this editor card matches the currently selected diagram node.
+ * @param {(element: HTMLLIElement | null) => void} props.cardRef
+ * Stores the rendered card element for selection-based scrolling.
  * @param {object} props - Component properties.
  * @param {object} props.step
  * Structured process-step data.
@@ -85,6 +89,8 @@ const ProcessStepCard = ({
   availableSteps,
   stepNumber,
   validationIssues,
+  isSelected,
+  cardRef,
   onUpdateStep,
   onUpdateConnections,
 }) => {
@@ -256,10 +262,14 @@ const ProcessStepCard = ({
 
   return (
     <li
+      ref={cardRef}
       className={[
         "process-step-card",
         hasValidationIssues
           ? "process-step-card--validation-issues"
+          : "",
+        isSelected
+          ? "process-step-card--selected"
           : "",
       ]
         .filter(Boolean)

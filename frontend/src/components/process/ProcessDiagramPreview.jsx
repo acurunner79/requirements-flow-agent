@@ -33,6 +33,8 @@ import { createProcessDiagramLayout } from "../../utils/processDiagramLayoutUtil
  */
 const ProcessDiagramPreview = ({
   processModel,
+  selectedStepId,
+  onStepSelect,
 }) => {
   /**
    * Store references to the diagram surface and rendered process nodes.
@@ -680,6 +682,26 @@ const ProcessDiagramPreview = ({
                   return (
                     <article
                       key={node.stepId}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Select ${step.name}`}
+                      aria-pressed={selectedStepId === node.stepId}
+                      onClick={() => {
+                        onStepSelect?.(node.stepId);
+                      }}
+                      onKeyDown={(event) => {
+                        /**
+                         * Match native button keyboard behavior so users can select a process step
+                         * with either Enter or Space.
+                         */
+                        if (
+                          event.key === "Enter" ||
+                          event.key === " "
+                        ) {
+                          event.preventDefault();
+                          onStepSelect?.(node.stepId);
+                        }
+                      }}
                       ref={(element) => {
                         /**
                          * Keep the latest rendered node element available for
@@ -697,7 +719,14 @@ const ProcessDiagramPreview = ({
                           );
                         }
                       }}
-                      className="process-diagram-preview__node"
+                      className={[
+                        "process-diagram-preview__node",
+                        selectedStepId === node.stepId
+                          ? "process-diagram-preview__node--selected"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                       data-column={node.column}
                       data-row={node.row}
                       style={{

@@ -7,6 +7,7 @@ import {
   describe,
   expect,
   test,
+  vi,
 } from "vitest";
 
 import {
@@ -833,5 +834,167 @@ describe("ProcessDiagramPreview", () => {
     expect(diagramContent).toHaveStyle({
       transform: "translate(0px, 0px) scale(1)",
     });
+  });
+
+  /**
+   * Confirms that selecting a diagram node reports its step identifier so the
+   * parent workspace can synchronize the matching editor section.
+   */
+  test("reports the selected process step", async () => {
+    const user = userEvent.setup();
+    const handleStepSelect = vi.fn();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+        onStepSelect={handleStepSelect}
+      />
+    );
+
+    await user.click(
+      screen.getByText("Submit request")
+    );
+
+    expect(handleStepSelect).toHaveBeenCalledTimes(1);
+    expect(handleStepSelect).toHaveBeenCalledWith(
+      "step-1"
+    );
+  });
+
+  /**
+   * Confirms that keyboard users can select a process step with the same
+   * callback used for pointer-based node selection.
+   */
+  test("supports keyboard selection for process steps", async () => {
+    const user = userEvent.setup();
+    const handleStepSelect = vi.fn();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+        onStepSelect={handleStepSelect}
+      />
+    );
+
+    const processStep = screen.getByRole("button", {
+      name: "Select Submit request",
+    });
+
+    processStep.focus();
+
+    await user.keyboard("{Enter}");
+
+    expect(handleStepSelect).toHaveBeenCalledTimes(1);
+    expect(handleStepSelect).toHaveBeenCalledWith(
+      "step-1"
+    );
+  });
+
+  /**
+   * Confirms that the diagram visually identifies the step selected by the
+   * parent workspace.
+   */
+  test("marks the selected process step in the diagram", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+        selectedStepId="step-1"
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Select Submit request",
+      })
+    ).toHaveClass(
+      "process-diagram-preview__node--selected"
+    );
   });
 });

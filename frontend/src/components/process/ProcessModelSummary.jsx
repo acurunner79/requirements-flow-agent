@@ -1,3 +1,8 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import ActorEditor from "./ActorEditor";
 import ProcessExportActions from "./ProcessExportActions";
 import ProcessNameEditor from "./ProcessNameEditor";
@@ -72,6 +77,37 @@ const ProcessModelSummary = ({
   onExportVisio,
   isExportingVisio,
 }) => {
+
+  /**
+   * Track the process step currently selected from the diagram so the matching
+   * editor card can be highlighted in the review workspace.
+   */
+  const [selectedStepId, setSelectedStepId] = useState(null);
+
+    /**
+   * Scroll the matching editor card into view whenever diagram selection
+   * changes.
+   */
+  useEffect(() => {
+    if (!selectedStepId) {
+      return;
+    }
+
+    const selectedCard =
+      stepCardElementsRef.current.get(selectedStepId);
+
+    selectedCard?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [selectedStepId]);
+
+  /**
+   * Store each rendered editor card by step ID so diagram selection can bring
+   * the matching card into view.
+   */
+  const stepCardElementsRef = useRef(new Map());
+
   /**
    * Validate the latest process-model state before rendering the review panel.
    *
@@ -126,6 +162,8 @@ const ProcessModelSummary = ({
        */}
       <ProcessDiagramPreview
         processModel={processModel}
+        selectedStepId={selectedStepId}
+        onStepSelect={setSelectedStepId}
       />
 
       <section
@@ -165,6 +203,23 @@ const ProcessModelSummary = ({
                 availableSteps={processModel.steps}
                 stepNumber={index + 1}
                 validationIssues={stepValidationIssues}
+                isSelected={selectedStepId === step.id}
+                cardRef={(element) => {
+                  /**
+                   * Keep the latest editor element available for selection
+                   * scrolling and remove stale entries after unmounting.
+                   */
+                  if (element) {
+                    stepCardElementsRef.current.set(
+                      step.id,
+                      element
+                    );
+                  } else {
+                    stepCardElementsRef.current.delete(
+                      step.id
+                    );
+                  }
+                }}
                 onUpdateStep={onUpdateStep}
                 onUpdateConnections={onUpdateConnections}
               />
