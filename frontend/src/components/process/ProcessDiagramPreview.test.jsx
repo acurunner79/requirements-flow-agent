@@ -156,4 +156,54 @@ describe("ProcessDiagramPreview", () => {
       )
     ).toBeInTheDocument();
   });
+
+  /**
+   * Confirms that a labeled process connection displays its branch text in the
+   * diagram preview so decision outcomes remain understandable.
+   */
+  test("renders branch labels for decision connectors", () => {
+    const processModel = {
+      processName: "Refund Decision",
+      actors: [
+        "Customer Service",
+        "Manager",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "decision",
+          name: "Is manager approval required?",
+          owner: "Customer Service",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "Yes",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve refund",
+          owner: "Manager",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    /**
+     * Branch text should be associated with the exact connector it describes.
+     */
+    expect(
+      screen.getByTestId(
+        "process-connector-label-step-1-step-2"
+      )
+    ).toHaveTextContent("Yes");
+  });
 });

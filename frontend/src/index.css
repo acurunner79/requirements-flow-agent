@@ -1343,6 +1343,27 @@ ul {
 }
 
 /* ========================================
+   Diagram Connector Labels
+   ======================================== */
+
+/**
+ * Branch labels sit directly on the connector overlay and use a compact,
+ * high-contrast treatment so decision outcomes remain legible over swimlane
+ * backgrounds and grid lines.
+ */
+.process-diagram-preview__connector-label {
+  paint-order: stroke;
+  fill: var(--color-text-primary);
+  stroke: #ffffff;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+/* ========================================
    Diagram Swimlanes
    ======================================== */
 

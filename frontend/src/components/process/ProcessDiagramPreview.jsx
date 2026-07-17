@@ -163,14 +163,28 @@ const ProcessDiagramPreview = ({
             startX +
             (endX - startX) / 2;
 
-          return {
+            return {
             ...edge,
+
+            /**
+             * Store the orthogonal SVG path connecting the measured source and
+             * target process nodes.
+             */
             path: [
               `M ${startX} ${startY}`,
               `L ${midpointX} ${startY}`,
               `L ${midpointX} ${endY}`,
               `L ${endX} ${endY}`,
             ].join(" "),
+
+            /**
+             * Place branch text near the center of the connector's vertical
+             * routing segment so labels remain associated with their path.
+             */
+            labelX: midpointX,
+            labelY:
+              startY +
+              (endY - startY) / 2,
           };
         })
         .filter(Boolean);
@@ -245,18 +259,41 @@ const ProcessDiagramPreview = ({
           aria-hidden="true"
         >
           {connectorPaths.map((connector) => (
-            <path
+            <g
               key={
                 `${connector.sourceStepId}-${connector.targetStepId}`
               }
-              className="process-diagram-preview__connector"
-              data-testid={
-                `process-connector-${connector.sourceStepId}-${connector.targetStepId}`
-              }
-              data-source-step-id={connector.sourceStepId}
-              data-target-step-id={connector.targetStepId}
-              d={connector.path}
-            />
+              className="process-diagram-preview__connector-group"
+            >
+              <path
+                className="process-diagram-preview__connector"
+                data-testid={
+                  `process-connector-${connector.sourceStepId}-${connector.targetStepId}`
+                }
+                data-source-step-id={connector.sourceStepId}
+                data-target-step-id={connector.targetStepId}
+                d={connector.path}
+              />
+
+              {/**
+               * Render branch text only when the connection contains a usable
+               * label. Ordinary unlabeled transitions remain visually clean.
+               */}
+              {connector.label && (
+                <text
+                  className="process-diagram-preview__connector-label"
+                  data-testid={
+                    `process-connector-label-${connector.sourceStepId}-${connector.targetStepId}`
+                  }
+                  x={connector.labelX}
+                  y={connector.labelY}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
+                  {connector.label}
+                </text>
+              )}
+            </g>
           ))}
         </svg>
 
