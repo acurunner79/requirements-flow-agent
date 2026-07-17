@@ -2,9 +2,9 @@
 
 - **Current phase:** Phase 3 — Diagram and visualization
 - **Current item:** Add arrowheads to process connectors
-- **Last completed item:** Add branch labels to decision connectors
+- **Last completed item:** Add arrowheads to process connectors
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 74 passed, 0 failed
+- **Frontend test status:** 75 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -53,7 +53,7 @@
 - [x] Redesign the analyzed-process workspace for diagram and editor usability.
 - [x] Draw process connectors.
 - [x] Render branch labels directly on connectors.
-- [ ] Improve connector routing and arrowheads.
+- [x] Improve connector routing and arrowheads.
 - [ ] Add pan and zoom.
 - [ ] Add fit-to-screen.
 - [ ] Improve navigation for large workflows.

@@ -258,6 +258,31 @@ const ProcessDiagramPreview = ({
           className="process-diagram-preview__connectors"
           aria-hidden="true"
         >
+
+          {/**
+           * Define one reusable arrowhead marker for every process connector.
+           *
+           * The marker inherits the connector stroke color through
+           * `context-stroke`, keeping the arrowhead visually synchronized with
+           * future connector state and validation styling.
+           */}
+          <defs>
+            <marker
+              id="process-diagram-arrowhead"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+              markerUnits="strokeWidth"
+            >
+              <path
+                d="M 0 0 L 8 4 L 0 8 Z"
+                fill="context-stroke"
+              />
+            </marker>
+          </defs>
+
           {connectorPaths.map((connector) => (
             <g
               key={
@@ -266,6 +291,7 @@ const ProcessDiagramPreview = ({
               className="process-diagram-preview__connector-group"
             >
               <path
+                markerEnd="url(#process-diagram-arrowhead)"
                 className="process-diagram-preview__connector"
                 data-testid={
                   `process-connector-${connector.sourceStepId}-${connector.targetStepId}`

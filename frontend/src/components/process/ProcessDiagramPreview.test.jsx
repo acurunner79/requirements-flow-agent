@@ -206,4 +206,58 @@ describe("ProcessDiagramPreview", () => {
       )
     ).toHaveTextContent("Yes");
   });
+
+  /**
+   * Confirms that rendered process connectors reference the shared SVG arrow
+   * marker so users can understand the direction of each workflow transition.
+   */
+  test("renders arrowheads on process connectors", () => {
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          name: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          name: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    /**
+     * The connector should reference the reusable marker definition placed in
+     * the diagram SVG.
+     */
+    expect(
+      screen.getByTestId(
+        "process-connector-step-1-step-2"
+      )
+    ).toHaveAttribute(
+      "marker-end",
+      "url(#process-diagram-arrowhead)"
+    );
+  });
 });
