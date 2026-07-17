@@ -51,35 +51,36 @@ describe("createProcessDiagramLayout", () => {
     expect(
       createProcessDiagramLayout(processModel)
     ).toEqual({
-      nodes: [
-        {
-          stepId: "step-1",
-          column: 0,
-          row: 0,
-        },
-        {
-          stepId: "step-2",
-          column: 1,
-          row: 0,
-        },
-        {
-          stepId: "step-3",
-          column: 2,
-          row: 0,
-        },
-      ],
-      edges: [
-        {
-          sourceStepId: "step-1",
-          targetStepId: "step-2",
-          label: "",
-        },
-        {
-          sourceStepId: "step-2",
-          targetStepId: "step-3",
-          label: "",
-        },
-      ],
+        lanes: [],
+        nodes: [
+            {
+            stepId: "step-1",
+            column: 0,
+            row: 0,
+            },
+            {
+            stepId: "step-2",
+            column: 1,
+            row: 0,
+            },
+            {
+            stepId: "step-3",
+            column: 2,
+            row: 0,
+            },
+        ],
+        edges: [
+            {
+            sourceStepId: "step-1",
+            targetStepId: "step-2",
+            label: "",
+            },
+            {
+            sourceStepId: "step-2",
+            targetStepId: "step-3",
+            label: "",
+            },
+        ],
     });
   });
 
@@ -130,6 +131,7 @@ describe("createProcessDiagramLayout", () => {
         expect(
             createProcessDiagramLayout(processModel)
         ).toEqual({
+            lanes: [],
             nodes: [
             {
                 stepId: "step-1",
@@ -229,6 +231,7 @@ describe("createProcessDiagramLayout", () => {
         expect(
             createProcessDiagramLayout(processModel)
         ).toEqual({
+            lanes: [],
             nodes: [
             {
                 stepId: "step-1",
@@ -343,6 +346,7 @@ describe("createProcessDiagramLayout", () => {
         expect(
             createProcessDiagramLayout(processModel)
         ).toEqual({
+            lanes: [],
             nodes: [
             {
                 stepId: "step-1",
@@ -527,6 +531,7 @@ describe("createProcessDiagramLayout", () => {
         expect(
             createProcessDiagramLayout(processModel)
         ).toEqual({
+            lanes: [],
             nodes: [
             {
                 stepId: "step-1",
@@ -620,6 +625,73 @@ describe("createProcessDiagramLayout", () => {
 
         expect(disconnectedTarget.row).toBe(
             disconnectedSource.row
+        );
+    });
+
+    /**
+     * Verifies that the ordered actors collection becomes the diagram's swimlane
+     * definition and that each process step is assigned to its owner's lane.
+     */
+    test("assigns process steps to actor-based swimlanes", () => {
+        const processModel = {
+            actors: [
+            "Customer",
+            "Support Agent",
+            ],
+            steps: [
+            {
+                id: "step-1",
+                type: "start",
+                name: "Submit request",
+                owner: "Customer",
+                connections: [
+                {
+                    targetStepId: "step-2",
+                    label: "",
+                },
+                ],
+            },
+            {
+                id: "step-2",
+                type: "process",
+                name: "Review request",
+                owner: "Support Agent",
+                connections: [],
+            },
+            ],
+        };
+
+        const layout = createProcessDiagramLayout(processModel);
+
+        /**
+         * Swimlane order should match the order supplied by processModel.actors so
+         * the visual diagram remains stable and predictable.
+         */
+        expect(layout.lanes).toEqual([
+            {
+            actor: "Customer",
+            lane: 0,
+            },
+            {
+            actor: "Support Agent",
+            lane: 1,
+            },
+        ]);
+
+        /**
+         * Each node should carry the lane index associated with its step owner.
+         */
+        expect(layout.nodes).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    stepId: "step-1",
+                    lane: 0,
+                }),
+                expect.objectContaining({
+                    stepId: "step-2",
+                    lane: 1,
+                }),
+            ])
         );
     });
 });

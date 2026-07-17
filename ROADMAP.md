@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
 - **Current phase:** Phase 3 — Diagram and visualization
-- **Current item:** Add actor-based swimlanes
-- **Last completed item:** Improve automatic flow layout
+- **Current item:** Build the interactive process diagram preview
+- **Last completed item:** Add actor-based swimlanes
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 70 passed, 0 failed
+- **Frontend test status:** 71 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -48,7 +48,8 @@
 ## Phase 3 — Diagram and Visualization
 
 - [x] Improve automatic flow layout.
-- [ ] Add actor-based swimlanes.
+- [x] Add actor-based swimlanes.
+- [ ] Build the interactive process diagram preview.
 - [ ] Render branch labels directly on connectors.
 - [ ] Improve connector routing and arrowheads.
 - [ ] Add pan and zoom.

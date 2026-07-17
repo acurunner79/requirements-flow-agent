@@ -54,6 +54,30 @@ const createProcessDiagramLayout = (processModel) => {
     ])
   );
 
+  /**
+   * Preserve the actor order supplied by the process model so swimlanes remain
+   * stable across renders and match the order shown in the process editor.
+   */
+  const actors = Array.isArray(processModel?.actors)
+    ? processModel.actors
+    : [];
+
+  /**
+   * Convert the ordered actor collection into lane definitions and a lookup
+   * map that can be used while building diagram nodes.
+   */
+  const lanes = actors.map((actor, lane) => ({
+    actor,
+    lane,
+  }));
+
+  const laneByActor = new Map(
+    lanes.map(({ actor, lane }) => [
+      actor,
+      lane,
+    ])
+  );
+
   const nodePositions = new Map();
 
   /**
@@ -239,13 +263,30 @@ const createProcessDiagramLayout = (processModel) => {
         );
     }
 
+  /**
+   * Combine each step's calculated grid position with the swimlane belonging
+   * to its owner. A missing owner remains unassigned rather than being placed
+   * into an incorrect actor lane.
+   */
   const nodes = steps.map((step) => {
     const position = nodePositions.get(step.id);
+
+    const lane = laneByActor.get(step.owner);
 
     return {
       stepId: step.id,
       column: position.column,
       row: position.row,
+
+      /**
+       * Only include a lane when the step owner matches a known process actor.
+       * This keeps unassigned or legacy process nodes free of undefined fields.
+       */
+      ...(lane !== undefined
+        ? {
+            lane,
+          }
+        : {}),
     };
   });
 
@@ -260,7 +301,8 @@ const createProcessDiagramLayout = (processModel) => {
     }));
   });
 
-  return {
+    return {
+    lanes,
     nodes,
     edges,
   };
