@@ -3,6 +3,7 @@ import ProcessExportActions from "./ProcessExportActions";
 import ProcessNameEditor from "./ProcessNameEditor";
 import ProcessStepCard from "./ProcessStepCard";
 import ProcessValidationSummary from "./ProcessValidationSummary";
+import ProcessDiagramPreview from "./ProcessDiagramPreview";
 import {
   VALIDATION_SEVERITIES,
   validateProcessModel,
@@ -113,6 +114,18 @@ const ProcessModelSummary = ({
 
       <ProcessValidationSummary
         validationIssues={validationIssues}
+      />
+
+      {/**
+       * Present the current process model as a visual workflow before the user
+       * moves into detailed step-by-step editing.
+       *
+       * The preview recalculates from the same process model on every render,
+       * so actor, ownership, and step changes remain synchronized with the
+       * editable review workspace below.
+       */}
+      <ProcessDiagramPreview
+        processModel={processModel}
       />
 
       <section

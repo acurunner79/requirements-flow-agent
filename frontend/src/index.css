@@ -1233,6 +1233,202 @@ ul {
 }
 
 /* ========================================
+   Process Diagram Preview
+   ======================================== */
+
+/**
+ * The diagram preview presents the generated workflow as actor swimlanes with
+ * process nodes positioned by the automatic layout utility.
+ *
+ * Horizontal scrolling is allowed when a process contains many columns so node
+ * dimensions remain readable instead of shrinking into an unusable layout.
+ */
+.process-diagram-preview {
+  margin-top: 34px;
+}
+
+.process-diagram-preview__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.process-diagram-preview__eyebrow {
+  margin: 0 0 5px;
+  color: var(--color-accent-dark);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.process-diagram-preview__header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.process-diagram-preview__surface {
+  overflow-x: auto;
+  background-color: #f5f5f5;
+  border: 1px solid #d5d5d5;
+}
+
+/* ========================================
+   Diagram Swimlanes
+   ======================================== */
+
+/**
+ * Each actor receives one horizontal swimlane.
+ *
+ * The lane heading stays in a fixed-width first column, while the workflow area
+ * uses the column count calculated by the diagram layout utility.
+ */
+.process-diagram-preview__lane {
+  display: grid;
+  grid-template-columns:
+    150px
+    minmax(
+      calc(
+        var(--process-diagram-column-count) *
+        190px
+      ),
+      1fr
+    );
+  min-width: max-content;
+  border-bottom: 1px solid #d5d5d5;
+}
+
+.process-diagram-preview__lane:last-child {
+  border-bottom: 0;
+}
+
+.process-diagram-preview__lane-header {
+  display: flex;
+  align-items: flex-start;
+  padding: 18px 14px;
+  background-color: var(--color-accent-soft);
+  border-right: 1px solid #c9c9c9;
+}
+
+.process-diagram-preview__lane-header h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-accent-dark);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* ========================================
+   Diagram Lane Content
+   ======================================== */
+
+/**
+ * Node positions are supplied through inline CSS Grid coordinates calculated
+ * from the process layout. Fixed minimum column widths preserve clear spacing
+ * for later connector rendering.
+ */
+.process-diagram-preview__lane-content {
+  display: grid;
+  grid-template-columns: repeat(
+    var(--process-diagram-column-count),
+    minmax(170px, 1fr)
+  );
+  grid-auto-rows: minmax(110px, auto);
+  gap: 20px;
+  min-height: 146px;
+  padding: 18px 20px;
+  background-image:
+    linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.035) 1px,
+      transparent 1px
+    );
+  background-size: 190px 100%;
+}
+
+/* ========================================
+   Diagram Process Nodes
+   ======================================== */
+
+/**
+ * Process nodes use the same rectangular card language as the existing editor.
+ *
+ * The accent border provides immediate visual separation while leaving room
+ * for later state, selection, warning, and connector treatments.
+ */
+.process-diagram-preview__node {
+  align-self: start;
+  min-width: 0;
+  padding: 14px 15px;
+  background-color: #ffffff;
+  border: 1px solid #cfcfcf;
+  border-left: 4px solid var(--color-accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.process-diagram-preview__node-type {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.process-diagram-preview__node strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+/* ========================================
+   Responsive Process Diagram Preview
+   ======================================== */
+
+/**
+ * Smaller screens retain horizontal diagram scrolling while reducing the fixed
+ * swimlane-heading width and surrounding padding.
+ */
+@media (max-width: 720px) {
+  .process-diagram-preview__lane {
+    grid-template-columns:
+      120px
+      minmax(
+        calc(
+          var(--process-diagram-column-count) *
+          170px
+        ),
+        1fr
+      );
+  }
+
+  .process-diagram-preview__lane-header {
+    padding: 15px 12px;
+  }
+
+  .process-diagram-preview__lane-content {
+    grid-template-columns: repeat(
+      var(--process-diagram-column-count),
+      minmax(150px, 1fr)
+    );
+    gap: 16px;
+    padding: 15px 16px;
+    background-size: 170px 100%;
+  }
+}
+
+/* ========================================
    Process Validation Summary
    ======================================== */
 
