@@ -1,3 +1,10 @@
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import { createProcessDiagramLayout } from "../../utils/processDiagramLayoutUtils";
 
 // ========================================
@@ -7,9 +14,13 @@ import { createProcessDiagramLayout } from "../../utils/processDiagramLayoutUtil
 /**
  * Renders a visual preview of the current process model.
  *
- * This first version focuses on the two foundational diagram elements:
- * actor swimlane headings and process step nodes. Connector rendering and
- * interaction controls will be added in later Phase 3 milestones.
+ * The preview presents:
+ * - Actor-based swimlanes
+ * - Automatically positioned process nodes
+ * - Measured orthogonal connectors between related steps
+ *
+ * Connector positions are calculated from the rendered node elements so the
+ * lines remain aligned when the workspace width or node dimensions change.
  *
  * @param {object} props
  * Component properties.
@@ -23,8 +34,36 @@ import { createProcessDiagramLayout } from "../../utils/processDiagramLayoutUtil
 const ProcessDiagramPreview = ({
   processModel,
 }) => {
-  const layout = createProcessDiagramLayout(
-    processModel
+  /**
+   * Store references to the diagram surface and rendered process nodes.
+   *
+   * Connector geometry is calculated from the browser's measured element
+   * positions so lines remain aligned when the workspace width changes.
+   */
+  const surfaceRef = useRef(null);
+
+  const nodeElementsRef = useRef(
+    new Map()
+  );
+
+  const [
+    connectorPaths,
+    setConnectorPaths,
+  ] = useState([]);
+
+  /**
+   * Recalculate the diagram layout only when the process model changes.
+   *
+   * Stable layout arrays prevent connector measurement effects from running
+   * again merely because connector path state caused a component render.
+   */
+  const layout = useMemo(
+    () => createProcessDiagramLayout(
+      processModel
+    ),
+    [
+      processModel,
+    ]
   );
 
   const steps = Array.isArray(processModel?.steps)
@@ -53,6 +92,124 @@ const ProcessDiagramPreview = ({
         ) + 1
       : 1;
 
+  /**
+   * Measure every connected source and target node after the diagram renders.
+   *
+   * Each connector begins at the horizontal center of the source node's right
+   * edge and ends at the horizontal center of the target node's left edge.
+   * Coordinates are stored relative to the diagram surface for SVG rendering.
+   */
+  useLayoutEffect(() => {
+    const surfaceElement =
+      surfaceRef.current;
+
+    if (!surfaceElement) {
+      setConnectorPaths([]);
+      return undefined;
+    }
+
+    const calculateConnectorPaths = () => {
+      const surfaceBounds =
+        surfaceElement.getBoundingClientRect();
+
+      const nextConnectorPaths = layout.edges
+        .map((edge) => {
+          const sourceElement =
+            nodeElementsRef.current.get(
+              edge.sourceStepId
+            );
+
+          const targetElement =
+            nodeElementsRef.current.get(
+              edge.targetStepId
+            );
+
+          if (
+            !sourceElement ||
+            !targetElement
+          ) {
+            return null;
+          }
+
+          const sourceBounds =
+            sourceElement.getBoundingClientRect();
+
+          const targetBounds =
+            targetElement.getBoundingClientRect();
+
+          const startX =
+            sourceBounds.right -
+            surfaceBounds.left;
+
+          const startY =
+            sourceBounds.top -
+            surfaceBounds.top +
+            sourceBounds.height / 2;
+
+          const endX =
+            targetBounds.left -
+            surfaceBounds.left;
+
+          const endY =
+            targetBounds.top -
+            surfaceBounds.top +
+            targetBounds.height / 2;
+
+          /**
+           * Use an orthogonal path with a shared midpoint so connections remain
+           * easy to follow across actors and workflow rows.
+           */
+          const midpointX =
+            startX +
+            (endX - startX) / 2;
+
+          return {
+            ...edge,
+            path: [
+              `M ${startX} ${startY}`,
+              `L ${midpointX} ${startY}`,
+              `L ${midpointX} ${endY}`,
+              `L ${endX} ${endY}`,
+            ].join(" "),
+          };
+        })
+        .filter(Boolean);
+
+      setConnectorPaths(
+        nextConnectorPaths
+      );
+    };
+
+    calculateConnectorPaths();
+
+    /**
+     * ResizeObserver is available in modern browsers but may be absent from
+     * lightweight test environments. The initial measurement still runs in
+     * either case.
+     */
+    if (
+      typeof ResizeObserver === "undefined"
+    ) {
+      return undefined;
+    }
+
+    const resizeObserver =
+      new ResizeObserver(
+        calculateConnectorPaths
+      );
+
+    resizeObserver.observe(
+      surfaceElement
+    );
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [
+    layout.edges,
+    layout.nodes,
+  ]);
+
   return (
     <section
       className="process-diagram-preview"
@@ -71,11 +228,38 @@ const ProcessDiagramPreview = ({
       </header>
 
       <div
+        ref={surfaceRef}
         className="process-diagram-preview__surface"
         style={{
           "--process-diagram-column-count": columnCount,
         }}
       >
+        {/**
+         * Render measured connector paths in an SVG overlay.
+         *
+         * The overlay is excluded from the accessibility tree because the
+         * process relationship is already represented by the underlying model.
+         */}
+        <svg
+          className="process-diagram-preview__connectors"
+          aria-hidden="true"
+        >
+          {connectorPaths.map((connector) => (
+            <path
+              key={
+                `${connector.sourceStepId}-${connector.targetStepId}`
+              }
+              className="process-diagram-preview__connector"
+              data-testid={
+                `process-connector-${connector.sourceStepId}-${connector.targetStepId}`
+              }
+              data-source-step-id={connector.sourceStepId}
+              data-target-step-id={connector.targetStepId}
+              d={connector.path}
+            />
+          ))}
+        </svg>
+
         {layout.lanes.map((lane) => {
           const laneNodes = layout.nodes.filter(
             (node) => node.lane === lane.lane
@@ -106,6 +290,23 @@ const ProcessDiagramPreview = ({
                   return (
                     <article
                       key={node.stepId}
+                      ref={(element) => {
+                        /**
+                         * Keep the latest rendered node element available for
+                         * connector measurement and remove stale references
+                         * when a node leaves the process model.
+                         */
+                        if (element) {
+                          nodeElementsRef.current.set(
+                            node.stepId,
+                            element
+                          );
+                        } else {
+                          nodeElementsRef.current.delete(
+                            node.stepId
+                          );
+                        }
+                      }}
                       className="process-diagram-preview__node"
                       data-column={node.column}
                       data-row={node.row}

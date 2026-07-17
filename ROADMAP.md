@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
 - **Current phase:** Phase 3 — Diagram and visualization
-- **Current item:** Draw process connectors
-- **Last completed item:** Build the interactive process diagram preview
+- **Current item:** Add branch labels to decision connectors
+- **Last completed item:** Draw process connectors
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 72 passed, 0 failed
+- **Frontend test status:** 73 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -50,7 +50,8 @@
 - [x] Improve automatic flow layout.
 - [x] Add actor-based swimlanes.
 - [x] Build the interactive process diagram preview.
-- [ ] Redesign the analyzed-process workspace for diagram and editor usability.
+- [x] Redesign the analyzed-process workspace for diagram and editor usability.
+- [x] Draw process connectors.
 - [ ] Render branch labels directly on connectors.
 - [ ] Improve connector routing and arrowheads.
 - [ ] Add pan and zoom.

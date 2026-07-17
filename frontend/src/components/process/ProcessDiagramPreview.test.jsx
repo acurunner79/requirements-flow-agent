@@ -105,4 +105,55 @@ describe("ProcessDiagramPreview", () => {
       screen.getByText("Review support request")
     ).toBeInTheDocument();
   });
+
+  /**
+   * Confirms that each process connection is represented by a connector element
+   * linking the source and target steps in the diagram preview.
+   */
+  test("renders process connectors", () => {
+    const processModel = {
+      processName: "Customer Support Request",
+      actors: [
+        "Customer",
+        "Support Agent",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          label: "Submit support request",
+          owner: "Customer",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          label: "Review support request",
+          owner: "Support Agent",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    /**
+     * Connector elements expose their source and target step IDs so later
+     * routing, labeling, and interaction behavior can remain deterministic.
+     */
+    expect(
+      screen.getByTestId(
+        "process-connector-step-1-step-2"
+      )
+    ).toBeInTheDocument();
+  });
 });
