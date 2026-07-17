@@ -430,6 +430,33 @@ ul {
   align-items: stretch;
 }
 
+/**
+ * Once analysis is complete, the workspace switches from the original
+ * side-by-side input/output layout to a single wide review column.
+ *
+ * This gives the diagram, validation summary, step editor, and export controls
+ * the horizontal space they need while keeping the pre-analysis experience
+ * unchanged.
+ */
+.workspace__content--analyzed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/**
+ * Keep the original requirements available as a compact reference panel after
+ * analysis instead of allowing it to occupy half of the workspace height.
+ */
+.workspace__content--analyzed .workspace-panel--input {
+  min-height: 0;
+}
+
+/**
+ * Allow the generated process workspace to use the full available width.
+ */
+.workspace__content--analyzed .workspace-panel--output {
+  min-height: 0;
+}
+
 
 /* ========================================
    Workspace Panels

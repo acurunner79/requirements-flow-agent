@@ -50,6 +50,7 @@
 - [x] Improve automatic flow layout.
 - [x] Add actor-based swimlanes.
 - [x] Build the interactive process diagram preview.
+- [ ] Redesign the analyzed-process workspace for diagram and editor usability.
 - [ ] Render branch labels directly on connectors.
 - [ ] Improve connector routing and arrowheads.
 - [ ] Add pan and zoom.

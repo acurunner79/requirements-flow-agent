@@ -403,7 +403,22 @@ const App = () => {
             </p>
           </div>
 
-          <div className="workspace__content">
+          {/**
+           * The workspace uses a wider analyzed-state layout once a process model
+           * exists. This gives the diagram and process editor enough horizontal
+           * space without changing the original input-and-empty-state experience.
+           */}
+          <div
+            className={[
+              "workspace__content",
+              processModel
+                ? "workspace__content--analyzed"
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            data-testid="workspace-content"
+          >
             <section className="workspace-panel workspace-panel--input">
               <RequirementsForm
                 requirements={requirements}

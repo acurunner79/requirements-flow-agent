@@ -202,6 +202,17 @@ describe("App requirements workflow", () => {
         "Process model awaiting analysis"
       )
     ).not.toBeInTheDocument();
+
+    /**
+     * The workspace should expose an analyzed-state modifier so the frontend
+     * can switch from the original split input/output layout to the wider
+     * diagram-and-editor workspace.
+     */
+    expect(
+      screen.getByTestId("workspace-content")
+    ).toHaveClass(
+      "workspace__content--analyzed"
+    );
   });
 
 /**
