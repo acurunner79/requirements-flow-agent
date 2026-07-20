@@ -716,13 +716,29 @@ const ProcessDiagramPreview = ({
                    */
                   const validationSeverity =
                     validationSeverityByStepId.get(node.stepId);
+                  
+                  /**
+                   * Use the editable process-step label as the diagram's primary display text.
+                   *
+                   * Older or externally supplied process models may still provide `name`, so
+                   * retain it as a compatibility fallback. The step ID provides a final safe
+                   * value rather than rendering an undefined accessible name.
+                   */
+                  const stepLabel =
+                    typeof step.label === "string" &&
+                    step.label.trim()
+                      ? step.label.trim()
+                      : typeof step.name === "string" &&
+                          step.name.trim()
+                        ? step.name.trim()
+                        : step.id;
 
                   return (
                     <article
                       key={node.stepId}
                       role="button"
                       tabIndex={0}
-                      aria-label={`Select ${step.name}`}
+                      aria-label={`Select ${stepLabel}`}
                       aria-pressed={selectedStepId === node.stepId}
                       onClick={() => {
                         onStepSelect?.(node.stepId);
@@ -788,7 +804,7 @@ const ProcessDiagramPreview = ({
                       </span>
 
                       <strong>
-                        {step.name}
+                        {stepLabel}
                       </strong>
                     </article>
                   );

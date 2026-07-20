@@ -185,17 +185,44 @@ describe("App requirements workflow", () => {
       )
     ).toBeInTheDocument();
 
+    /**
+     * Confirm that each generated step appears in both the interactive diagram and
+     * its matching detailed editor card.
+     *
+     * Scoping the editor assertions avoids collisions with connection-target text
+     * that can repeat the same step description elsewhere in the workspace.
+     */
     expect(
-      screen.getByText(
+      screen.getByRole("button", {
+        name: "Select Review refund request",
+      })
+    ).toBeInTheDocument();
+
+    const reviewStepCard = screen.getByRole("listitem", {
+      name: /Process step \d+: Review refund request/,
+    });
+
+    expect(
+      within(reviewStepCard).getByText(
         "Review refund request"
       )
     ).toBeInTheDocument();
 
     expect(
-      screen.getAllByText(
+      screen.getByRole("button", {
+        name: "Select Approve high-value refund",
+      })
+    ).toBeInTheDocument();
+
+    const approvalStepCard = screen.getByRole("listitem", {
+      name: /Process step \d+: Approve high-value refund/,
+    });
+
+    expect(
+      within(approvalStepCard).getByText(
         "Approve high-value refund"
       )
-    ).toHaveLength(2);
+    ).toBeInTheDocument();
 
     expect(
       screen.queryByText(

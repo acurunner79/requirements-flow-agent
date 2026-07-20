@@ -89,10 +89,45 @@ const ProcessModelSummary = ({
   const [selectedStepId, setSelectedStepId] = useState(null);
 
   /**
-   * Tracks the process step currently being dragged so drop targets can apply
-   * the correct visual state and send the right identifiers to the parent.
+   * Counts diagram-selection requests independently from the selected step ID.
+   *
+   * Clicking an already-selected node should still scroll its editor card into
+   * view, especially after drag-and-drop has changed the card's position.
    */
-  const [draggedStepId, setDraggedStepId] = useState(null);
+  const [
+    selectionRequestCount,
+    setSelectionRequestCount,
+  ] = useState(0);
+
+
+    /**
+   * Preserve the active dragged-step identifier synchronously.
+   *
+   * Some browsers can return an empty native DataTransfer value during drop.
+   * The ref provides a reliable fallback without waiting for React state to
+   * finish rendering.
+   */
+  const draggedStepIdRef = useRef(null);
+
+  /**
+   * Selects a process step and records every diagram-selection request.
+   *
+   * Incrementing the request count ensures repeated clicks on the same node
+   * still trigger the scrolling effect even though the selected ID is
+   * unchanged.
+   *
+   * @param {string} stepId
+   * Identifier of the process step selected in the diagram.
+   *
+   * @returns {void}
+   */
+  const handleSelectProcessStep = (stepId) => {
+    setSelectedStepId(stepId);
+
+    setSelectionRequestCount(
+      (currentCount) => currentCount + 1
+    );
+  };
 
     /**
    * Scroll the matching editor card into view whenever diagram selection
@@ -110,7 +145,10 @@ const ProcessModelSummary = ({
       behavior: "smooth",
       block: "center",
     });
-  }, [selectedStepId]);
+    }, [
+    selectedStepId,
+    selectionRequestCount,
+  ]);
 
   /**
    * Store each rendered editor card by step ID so diagram selection can bring
@@ -174,7 +212,7 @@ const ProcessModelSummary = ({
         processModel={processModel}
         validationIssues={validationIssues}
         selectedStepId={selectedStepId}
-        onStepSelect={setSelectedStepId}
+        onStepSelect={handleSelectProcessStep}
       />
 
       <section
@@ -215,7 +253,6 @@ const ProcessModelSummary = ({
                 stepNumber={index + 1}
                 validationIssues={stepValidationIssues}
                 isSelected={selectedStepId === step.id}
-                isDragging={draggedStepId === step.id}
                 cardRef={(element) => {
                   if (element) {
                     stepCardElementsRef.current.set(
@@ -229,12 +266,19 @@ const ProcessModelSummary = ({
                   }
                 }}
                 onDragStart={() => {
-                  setDraggedStepId(step.id);
+                  /**
+                   * Store the dragged identifier synchronously without rerendering the process
+                   * step list while the browser's native drag operation is active.
+                   */
+                  draggedStepIdRef.current = step.id;
                 }}
                 onDragEnd={() => {
-                  setDraggedStepId(null);
+                  draggedStepIdRef.current = null;
                 }}
-                onDropStep={(movedStepId, targetStepId) => {
+                onDropStep={(targetStepId) => {
+                  const movedStepId =
+                    draggedStepIdRef.current;
+
                   if (
                     !movedStepId ||
                     movedStepId === targetStepId
@@ -247,7 +291,7 @@ const ProcessModelSummary = ({
                     targetStepId
                   );
 
-                  setDraggedStepId(null);
+                  draggedStepIdRef.current = null;
                 }}
                 onUpdateStep={onUpdateStep}
                 onUpdateConnections={onUpdateConnections}

@@ -85,10 +85,8 @@ const PROCESS_STEP_TYPES = [
  * Records this process step as the active dragged item.
  * @param {() => void} props.onDragEnd
  * Clears the active dragged-step state.
- * @param {(movedStepId: string, targetStepId: string) => void}
- * props.onDropStep
- * Requests that the transferred process step be moved before this process
- * step.
+ * @param {(targetStepId: string) => void} props.onDropStep
+ * Requests that the active dragged step be moved before this process step.
  * @param {(stepId: string, updates: object) => void} props.onUpdateStep
  * Applies approved metadata changes to the parent process model.
  * @param {(stepId: string, connections: Array<object>) => void}
@@ -102,7 +100,6 @@ const ProcessStepCard = ({
   stepNumber,
   validationIssues,
   isSelected,
-  isDragging,
   cardRef,
   onDragStart,
   onDragEnd,
@@ -279,6 +276,7 @@ const ProcessStepCard = ({
   return (
         <li
           ref={cardRef}
+          aria-label={`Process step ${stepNumber}: ${step.label}`}
           className={[
             "process-step-card",
             hasValidationIssues
@@ -287,27 +285,34 @@ const ProcessStepCard = ({
             isSelected
               ? "process-step-card--selected"
               : "",
-            isDragging
-              ? "process-step-card--dragging"
-              : "",
           ]
             .filter(Boolean)
             .join(" ")}
           draggable={!isEditing}
           onDragStart={(event) => {
-            /**
-             * Mark the browser operation as a move and include the step identifier
-             * for native drag-and-drop compatibility and debugging.
-             */
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData(
               "text/plain",
               step.id
             );
 
+            /**
+             * Apply the drag presentation directly to the active DOM element so React
+             * does not rerender the list during the browser's native drag operation.
+             */
+            event.currentTarget.classList.add(
+              "process-step-card--dragging"
+            );
+
             onDragStart();
           }}
-          onDragEnd={onDragEnd}
+          onDragEnd={(event) => {
+            event.currentTarget.classList.remove(
+              "process-step-card--dragging"
+            );
+
+            onDragEnd();
+          }}
           onDragOver={(event) => {
             /**
              * Native drop events are disabled unless drag-over behavior explicitly
@@ -320,20 +325,10 @@ const ProcessStepCard = ({
             event.preventDefault();
 
             /**
-             * Read the dragged step identifier from the native transfer payload rather
-             * than depending on React state timing between drag-start and drop events.
+             * The parent owns the synchronously stored dragged-step identifier. This
+             * avoids browser-specific differences in DataTransfer payload availability.
              */
-            const movedStepId =
-              event.dataTransfer.getData("text/plain");
-
-            if (!movedStepId) {
-              return;
-            }
-
-            onDropStep(
-              movedStepId,
-              step.id
-            );
+            onDropStep(step.id);
           }}
         >
       <div

@@ -244,22 +244,13 @@ describe("ProcessModelSummary", () => {
    * Step identifiers can also appear in connection controls, so narrow the
    * lookup to the identifier rendered inside each process-step card.
    */
-  const sourceCard = screen
-    .getAllByText("step-2")
-    .map((element) =>
-      element.closest(".process-step-card")
-    )
-    .find(Boolean);
+    const sourceCard = screen.getByRole("listitem", {
+      name: "Process step 2: Approve request",
+    });
 
-  const targetCard = screen
-    .getAllByText("step-1")
-    .map((element) =>
-      element.closest(".process-step-card")
-    )
-    .find(Boolean);
-
-    expect(sourceCard).not.toBeUndefined();
-    expect(targetCard).not.toBeUndefined();
+    const targetCard = screen.getByRole("listitem", {
+      name: "Process step 1: Submit request",
+    });
 
     /**
      * JSDOM does not provide a complete native DataTransfer implementation, so
@@ -269,7 +260,7 @@ describe("ProcessModelSummary", () => {
       effectAllowed: "",
       dropEffect: "",
       setData: vi.fn(),
-      getData: vi.fn(() => "step-2"),
+      getData: vi.fn(() => ""),
     };
 
     fireEvent.dragStart(sourceCard, {
@@ -289,5 +280,71 @@ describe("ProcessModelSummary", () => {
       "step-2",
       "step-1"
     );
+  });
+
+  /**
+   * Confirms that selecting the same diagram node repeatedly still scrolls its
+   * editor card into view.
+   *
+   * Reordering can leave a step selected while its editor position changes, so
+   * a later click must perform a fresh scroll even when the selected ID itself
+   * has not changed.
+   */
+  test("scrolls again when the selected diagram node is clicked repeatedly", async () => {
+    const user = userEvent.setup();
+
+    const processModel = {
+      processName: "Approval Flow",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "step-1",
+          type: "start",
+          label: "Submit request",
+          owner: "Requester",
+          connections: [
+            {
+              targetStepId: "step-2",
+              label: "",
+            },
+          ],
+        },
+        {
+          id: "step-2",
+          type: "end",
+          label: "Approve request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+    };
+
+    render(
+      <ProcessModelSummary
+        processModel={processModel}
+        onUpdateProcessName={vi.fn()}
+        onAddActor={vi.fn()}
+        onUpdateActor={vi.fn()}
+        onRemoveActor={vi.fn()}
+        onUpdateStep={vi.fn()}
+        onReorderSteps={vi.fn()}
+        onUpdateConnections={vi.fn()}
+        onExportJson={vi.fn()}
+        onExportVisio={vi.fn()}
+        isExportingVisio={false}
+      />
+    );
+
+    const diagramNode = screen.getByRole("button", {
+      name: "Select Submit request",
+    });
+
+    await user.click(diagramNode);
+    await user.click(diagramNode);
+
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(2);
   });
 });
