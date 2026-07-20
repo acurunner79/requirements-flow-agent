@@ -54,6 +54,9 @@ import {
  * Removes an actor and marks related process steps as unassigned.
  * @param {(stepId: string, updates: object) => void} props.onUpdateStep
  * Applies approved field updates to a specific process step.
+ * @param {(movedStepId: string, targetStepId: string) => void}
+ * props.onReorderSteps
+ * Moves one process step before another step in the parent process model.
  * @param {(stepId: string, connections: Array<object>) => void}
  * props.onUpdateConnections
  * Applies the complete outgoing connection collection to a process step.
@@ -72,6 +75,7 @@ const ProcessModelSummary = ({
   onUpdateActor,
   onRemoveActor,
   onUpdateStep,
+  onReorderSteps,
   onUpdateConnections,
   onExportJson,
   onExportVisio,
@@ -83,6 +87,12 @@ const ProcessModelSummary = ({
    * editor card can be highlighted in the review workspace.
    */
   const [selectedStepId, setSelectedStepId] = useState(null);
+
+  /**
+   * Tracks the process step currently being dragged so drop targets can apply
+   * the correct visual state and send the right identifiers to the parent.
+   */
+  const [draggedStepId, setDraggedStepId] = useState(null);
 
     /**
    * Scroll the matching editor card into view whenever diagram selection
@@ -205,11 +215,8 @@ const ProcessModelSummary = ({
                 stepNumber={index + 1}
                 validationIssues={stepValidationIssues}
                 isSelected={selectedStepId === step.id}
+                isDragging={draggedStepId === step.id}
                 cardRef={(element) => {
-                  /**
-                   * Keep the latest editor element available for selection
-                   * scrolling and remove stale entries after unmounting.
-                   */
                   if (element) {
                     stepCardElementsRef.current.set(
                       step.id,
@@ -220,6 +227,27 @@ const ProcessModelSummary = ({
                       step.id
                     );
                   }
+                }}
+                onDragStart={() => {
+                  setDraggedStepId(step.id);
+                }}
+                onDragEnd={() => {
+                  setDraggedStepId(null);
+                }}
+                onDropStep={(movedStepId, targetStepId) => {
+                  if (
+                    !movedStepId ||
+                    movedStepId === targetStepId
+                  ) {
+                    return;
+                  }
+
+                  onReorderSteps(
+                    movedStepId,
+                    targetStepId
+                  );
+
+                  setDraggedStepId(null);
                 }}
                 onUpdateStep={onUpdateStep}
                 onUpdateConnections={onUpdateConnections}

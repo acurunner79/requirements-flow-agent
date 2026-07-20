@@ -1,15 +1,16 @@
 import { describe, expect, test } from "vitest";
 
 import {
-    addProcessActor,
-    createConnectionUpdates,
-    hasUsableText,
-    normalizeProcessConnections,
-    removeProcessActor,
-    updateProcessActor,
-    updateProcessName,
-    updateProcessStep,
-    updateProcessStepConnections,
+  addProcessActor,
+  createConnectionUpdates,
+  hasUsableText,
+  normalizeProcessConnections,
+  removeProcessActor,
+  reorderProcessSteps,
+  updateProcessActor,
+  updateProcessName,
+  updateProcessStep,
+  updateProcessStepConnections,
 } from "../processModelUtils";
 
 // ========================================
@@ -67,6 +68,85 @@ describe("normalizeProcessConnections", () => {
     ).toThrow(
       "A valid connection array is required."
     );
+  });
+});
+
+// ========================================
+// Process Step Reordering Tests
+// ========================================
+
+describe("reorderProcessSteps", () => {
+  /**
+   * Confirms that moving a process step creates a new process model and steps
+   * array while preserving the original step objects and source model.
+   */
+  test("moves a process step to a new position immutably", () => {
+    const originalModel = {
+      processName: "Request Review",
+      actors: [
+        "Requester",
+        "Approver",
+      ],
+      steps: [
+        {
+          id: "STEP-001",
+          type: "start",
+          label: "Submit request",
+          owner: "Requester",
+          connections: [],
+        },
+        {
+          id: "STEP-002",
+          type: "process",
+          label: "Review request",
+          owner: "Approver",
+          connections: [],
+        },
+        {
+          id: "STEP-003",
+          type: "end",
+          label: "Complete request",
+          owner: "Approver",
+          connections: [],
+        },
+      ],
+      warnings: [],
+    };
+
+    const updatedModel = reorderProcessSteps(
+      originalModel,
+      "STEP-003",
+      "STEP-001"
+    );
+
+    expect(updatedModel).not.toBe(originalModel);
+    expect(updatedModel.steps).not.toBe(
+      originalModel.steps
+    );
+
+    expect(
+      updatedModel.steps.map((step) => step.id)
+    ).toEqual([
+      "STEP-003",
+      "STEP-001",
+      "STEP-002",
+    ]);
+
+    /**
+     * Reordering changes only array position. The individual step objects do
+     * not require cloning because their stored data remains unchanged.
+     */
+    expect(updatedModel.steps[0]).toBe(
+      originalModel.steps[2]
+    );
+
+    expect(
+      originalModel.steps.map((step) => step.id)
+    ).toEqual([
+      "STEP-001",
+      "STEP-002",
+      "STEP-003",
+    ]);
   });
 });
 

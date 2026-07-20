@@ -77,6 +77,18 @@ const PROCESS_STEP_TYPES = [
  * One-based display position for the current process step.
  * @param {Array<object>} props.validationIssues
  * Validation errors and warnings associated with this process step.
+ * @param {boolean} props.isDragging
+ * Indicates whether this card is the process step currently being dragged.
+ * @param {React.Ref<HTMLLIElement>} props.cardRef
+ * Stores the rendered card element for diagram-selection scrolling.
+ * @param {() => void} props.onDragStart
+ * Records this process step as the active dragged item.
+ * @param {() => void} props.onDragEnd
+ * Clears the active dragged-step state.
+ * @param {(movedStepId: string, targetStepId: string) => void}
+ * props.onDropStep
+ * Requests that the transferred process step be moved before this process
+ * step.
  * @param {(stepId: string, updates: object) => void} props.onUpdateStep
  * Applies approved metadata changes to the parent process model.
  * @param {(stepId: string, connections: Array<object>) => void}
@@ -90,7 +102,11 @@ const ProcessStepCard = ({
   stepNumber,
   validationIssues,
   isSelected,
+  isDragging,
   cardRef,
+  onDragStart,
+  onDragEnd,
+  onDropStep,
   onUpdateStep,
   onUpdateConnections,
 }) => {
@@ -261,20 +277,65 @@ const ProcessStepCard = ({
   };
 
   return (
-    <li
-      ref={cardRef}
-      className={[
-        "process-step-card",
-        hasValidationIssues
-          ? "process-step-card--validation-issues"
-          : "",
-        isSelected
-          ? "process-step-card--selected"
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
+        <li
+          ref={cardRef}
+          className={[
+            "process-step-card",
+            hasValidationIssues
+              ? "process-step-card--validation-issues"
+              : "",
+            isSelected
+              ? "process-step-card--selected"
+              : "",
+            isDragging
+              ? "process-step-card--dragging"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          draggable={!isEditing}
+          onDragStart={(event) => {
+            /**
+             * Mark the browser operation as a move and include the step identifier
+             * for native drag-and-drop compatibility and debugging.
+             */
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(
+              "text/plain",
+              step.id
+            );
+
+            onDragStart();
+          }}
+          onDragEnd={onDragEnd}
+          onDragOver={(event) => {
+            /**
+             * Native drop events are disabled unless drag-over behavior explicitly
+             * prevents the browser default.
+             */
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+
+            /**
+             * Read the dragged step identifier from the native transfer payload rather
+             * than depending on React state timing between drag-start and drop events.
+             */
+            const movedStepId =
+              event.dataTransfer.getData("text/plain");
+
+            if (!movedStepId) {
+              return;
+            }
+
+            onDropStep(
+              movedStepId,
+              step.id
+            );
+          }}
+        >
       <div
         className="process-step-card__number"
         aria-label={`Process step ${stepNumber}`}

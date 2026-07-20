@@ -431,6 +431,122 @@ const removeProcessActor = (
 };
 
 // ========================================
+// Process Step Reordering
+// ========================================
+
+/**
+ * Returns a new process model with one process step moved before another step.
+ *
+ * Reordering changes only the position of existing step objects. The step
+ * objects themselves are preserved because none of their stored data changes.
+ *
+ * @param {object} processModel
+ * Complete structured process model currently stored in application state.
+ *
+ * @param {string} movedStepId
+ * Identifier of the process step being moved.
+ *
+ * @param {string} targetStepId
+ * Identifier of the process step that should follow the moved step.
+ *
+ * @returns {object}
+ * New process model containing the reordered process-step collection.
+ *
+ * @throws {Error}
+ * Throws when the process model, step identifiers, or referenced steps are
+ * invalid.
+ */
+const reorderProcessSteps = (
+  processModel,
+  movedStepId,
+  targetStepId
+) => {
+  if (
+    !processModel ||
+    !Array.isArray(processModel.steps)
+  ) {
+    throw new Error(
+      "A valid process model with a steps array is required."
+    );
+  }
+
+  if (
+    !hasUsableText(movedStepId) ||
+    !hasUsableText(targetStepId)
+  ) {
+    throw new Error(
+      "Valid moved and target process step IDs are required."
+    );
+  }
+
+  const normalizedMovedStepId = movedStepId.trim();
+  const normalizedTargetStepId = targetStepId.trim();
+
+  /**
+   * Moving a step onto itself does not change its position. Return the existing
+   * model so React does not perform an unnecessary state update.
+   */
+  if (
+    normalizedMovedStepId ===
+    normalizedTargetStepId
+  ) {
+    return processModel;
+  }
+
+  const movedStepIndex =
+    processModel.steps.findIndex(
+      (step) => step.id === normalizedMovedStepId
+    );
+
+  const targetStepIndex =
+    processModel.steps.findIndex(
+      (step) => step.id === normalizedTargetStepId
+    );
+
+  if (
+    movedStepIndex === -1 ||
+    targetStepIndex === -1
+  ) {
+    throw new Error(
+      "Both reordered process steps must exist in the process model."
+    );
+  }
+
+  /**
+   * Copy the collection before removing and reinserting the moved step so the
+   * original process model remains unchanged.
+   */
+  const reorderedSteps = [
+    ...processModel.steps,
+  ];
+
+  const [movedStep] = reorderedSteps.splice(
+    movedStepIndex,
+    1
+  );
+
+  /**
+   * Recalculate the target index after removal because removing an earlier
+   * step shifts every later array position one place to the left.
+   */
+  const updatedTargetIndex =
+    reorderedSteps.findIndex(
+      (step) => step.id === normalizedTargetStepId
+    );
+
+  reorderedSteps.splice(
+    updatedTargetIndex,
+    0,
+    movedStep
+  );
+
+  return {
+    ...processModel,
+    steps: reorderedSteps,
+  };
+};
+
+// ========================================
 // Process Connection Updates
 // ========================================
 
@@ -488,6 +604,7 @@ export {
   hasUsableText,
   normalizeProcessConnections,
   removeProcessActor,
+  reorderProcessSteps,
   updateProcessActor,
   updateProcessName,
   updateProcessStep,

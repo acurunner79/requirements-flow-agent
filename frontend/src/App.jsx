@@ -9,6 +9,7 @@ import { exportProcessModelForVisio } from "./utils/visioExportUtils";
 import {
   addProcessActor,
   removeProcessActor,
+  reorderProcessSteps,
   updateProcessActor,
   updateProcessName,
   updateProcessStep,
@@ -228,6 +229,40 @@ const App = () => {
     });
   };
 
+  /**
+   * Moves one process step before another step in the current process model.
+   *
+   * The reusable reorder utility performs the immutable array transformation.
+   * This handler keeps drag-and-drop state changes centralized in the
+   * application component that owns the authoritative process model.
+   *
+   * @param {string} movedStepId
+   * Identifier of the process step being moved.
+   *
+   * @param {string} targetStepId
+   * Identifier of the process step that should follow the moved step.
+   *
+   * @returns {void}
+   */
+  const handleReorderProcessSteps = (
+    movedStepId,
+    targetStepId
+  ) => {
+    setProcessModel((currentProcessModel) => {
+      // Ignore unexpected reorder attempts before analysis has produced a
+      // process model.
+      if (!currentProcessModel) {
+        return currentProcessModel;
+      }
+
+      return reorderProcessSteps(
+        currentProcessModel,
+        movedStepId,
+        targetStepId
+      );
+    });
+  };
+
 /**
  * Replaces the outgoing connection collection for one process step.
  *
@@ -443,6 +478,7 @@ const App = () => {
                   onUpdateActor={handleUpdateProcessActor}
                   onRemoveActor={handleRemoveProcessActor}
                   onUpdateStep={handleUpdateProcessStep}
+                  onReorderSteps={handleReorderProcessSteps}
                   onUpdateConnections={handleUpdateProcessStepConnections}
                   onExportJson={handleExportProcessModelAsJson}
                   onExportVisio={handleExportProcessModelForVisio}

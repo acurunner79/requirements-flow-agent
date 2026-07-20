@@ -1,10 +1,10 @@
 # Requirements Flow Agent Roadmap
 
 - **Current phase:** Phase 4 — Editing and review workflow
-- **Current item:** Add drag-and-drop step reordering
-- **Last completed item:** Highlight warnings and validation problems visually
+- **Current item:** Add visual connector creation
+- **Last completed item:** Add drag-and-drop step reordering
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 90 passed, 0 failed
+- **Frontend test status:** 92 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.
@@ -64,7 +64,7 @@
 
 ## Phase 4 — Editing and Review Workflow
 
-- [ ] Add drag-and-drop step reordering.
+- [x] Add drag-and-drop step reordering.
 - [ ] Add visual connector creation.
 - [ ] Add “insert step between” functionality.
 - [ ] Add step duplication.
