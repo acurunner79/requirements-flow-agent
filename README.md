@@ -198,6 +198,13 @@ AI mode sends validated business requirements to the configured AI provider and 
 
 Provider credentials must remain server-side. They must never be stored in frontend environment variables or exposed to browser code.
 
+### Production Demo Mode
+
+The deployed Render backend is currently configured to use deterministic mock analysis:
+
+```env
+ANALYSIS_MODE=mock
+
 ---
 
 ## Automated Testing
