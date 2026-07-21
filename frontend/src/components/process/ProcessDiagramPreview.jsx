@@ -186,7 +186,36 @@ const ProcessDiagramPreview = ({
       const surfaceBounds =
         surfaceElement.getBoundingClientRect();
 
-      const nextConnectorPaths = layout.edges
+      /**
+       * Count the outgoing routes for each source step so sibling connections can
+       * receive separate, symmetrically spaced routing channels.
+       */
+      const routeCountBySourceStepId =
+        layout.edges.reduce(
+          (routeCounts, edge) => {
+            const currentCount =
+              routeCounts.get(
+                edge.sourceStepId
+              ) || 0;
+
+            routeCounts.set(
+              edge.sourceStepId,
+              currentCount + 1
+            );
+
+            return routeCounts;
+          },
+          new Map()
+        );
+
+      /**
+       * Track the next channel index assigned to each source step while edges are
+       * processed in their stable model order.
+       */
+      const nextRouteIndexBySourceStepId =
+        new Map();
+
+        const nextConnectorPaths = layout.edges
         .map((edge) => {
           const sourceElement =
             nodeElementsRef.current.get(
@@ -197,6 +226,27 @@ const ProcessDiagramPreview = ({
             nodeElementsRef.current.get(
               edge.targetStepId
             );
+
+          /**
+           * Assign each sibling connection a stable channel index.
+           *
+           * The index follows the source step's connection order so route separation
+           * remains predictable across renders.
+           */
+          const routeIndex =
+            nextRouteIndexBySourceStepId.get(
+              edge.sourceStepId
+            ) || 0;
+
+          nextRouteIndexBySourceStepId.set(
+            edge.sourceStepId,
+            routeIndex + 1
+          );
+
+          const routeCount =
+            routeCountBySourceStepId.get(
+              edge.sourceStepId
+            ) || 1;
 
           if (
             !sourceElement ||
@@ -233,32 +283,88 @@ const ProcessDiagramPreview = ({
            * Use an orthogonal path with a shared midpoint so connections remain
            * easy to follow across actors and workflow rows.
            */
-          const midpointX =
+          /**
+           * Determine the horizontal space available between the source and target.
+           *
+           * Sibling routes divide this space into separate channels. This keeps each
+           * branch visually distinct without sending a connector farther away from the
+           * nodes that it joins.
+           */
+          const horizontalDistance =
+            endX - startX;
+
+          const routeFraction =
+            (routeIndex + 1) /
+            (routeCount + 1);
+
+          const routeChannelX =
             startX +
-            (endX - startX) / 2;
+            horizontalDistance *
+              routeFraction;
+
+          /**
+           * Treat nodes whose centers are nearly aligned as a direct left-to-right
+           * transition. Cross-row and cross-lane transitions use an orthogonal route
+           * through the branch's assigned channel.
+           */
+          const SAME_ROW_TOLERANCE = 8;
+
+          const isSameRow =
+            Math.abs(endY - startY) <=
+            SAME_ROW_TOLERANCE;
+
+          /**
+           * Keep branch text close to the source node so users can immediately associate
+           * decision outcomes such as Yes, No, and Retry with the decision that produced
+           * them.
+           */
+          const LABEL_EXIT_DISTANCE = 28;
+
+          const labelX =
+            startX +
+            Math.min(
+              LABEL_EXIT_DISTANCE,
+              Math.max(
+                horizontalDistance / 3,
+                12
+              )
+            );
+
+          const labelY =
+            startY - 12;
 
             return {
             ...edge,
 
             /**
+             * Preserve the assigned channel for rendering diagnostics and tests.
+             */
+            routeIndex,
+
+            /**
              * Store the orthogonal SVG path connecting the measured source and
              * target process nodes.
              */
-            path: [
-              `M ${startX} ${startY}`,
-              `L ${midpointX} ${startY}`,
-              `L ${midpointX} ${endY}`,
-              `L ${endX} ${endY}`,
-            ].join(" "),
-
             /**
-             * Place branch text near the center of the connector's vertical
-             * routing segment so labels remain associated with their path.
+             * Use a direct connector for horizontally aligned nodes.
+             *
+             * Other connections leave the source horizontally, travel vertically through
+             * their assigned channel, and enter the target from its left side.
              */
-            labelX: midpointX,
-            labelY:
-              startY +
-              (endY - startY) / 2,
+            path: isSameRow
+              ? [
+                  `M ${startX} ${startY}`,
+                  `L ${endX} ${endY}`,
+                ].join(" ")
+              : [
+                  `M ${startX} ${startY}`,
+                  `L ${routeChannelX} ${startY}`,
+                  `L ${routeChannelX} ${endY}`,
+                  `L ${endX} ${endY}`,
+                ].join(" "),
+
+            labelX,
+            labelY,
           };
         })
         .filter(Boolean);
@@ -411,10 +517,28 @@ const ProcessDiagramPreview = ({
       1
     );
 
+    /**
+     * Center the fitted diagram along any axis where the scaled content is smaller
+     * than the available viewport. A diagram that exactly fills an axis remains
+     * aligned to that axis's origin.
+     */
+    const fittedDiagramWidth =
+      diagramWidth * fittedScale;
+
+    const fittedDiagramHeight =
+      diagramHeight * fittedScale;
+
     setZoomLevel(fittedScale);
+
     setPanOffset({
-      x: 0,
-      y: 0,
+      x: Math.max(
+        (viewportWidth - fittedDiagramWidth) / 2,
+        0
+      ),
+      y: Math.max(
+        (viewportHeight - fittedDiagramHeight) / 2,
+        0
+      ),
     });
   };
 
@@ -658,6 +782,7 @@ const ProcessDiagramPreview = ({
                 }
                 data-source-step-id={connector.sourceStepId}
                 data-target-step-id={connector.targetStepId}
+                data-route-index={connector.routeIndex}
                 d={connector.path}
               />
 
@@ -688,6 +813,21 @@ const ProcessDiagramPreview = ({
             (node) => node.lane === lane.lane
           );
 
+          /**
+           * Normalize workflow rows within this swimlane.
+           *
+           * Global row values remain useful for understanding branch relationships,
+           * but a lane should not render empty grid rows above its first owned step.
+           */
+          const firstLaneRow =
+            laneNodes.length > 0
+              ? Math.min(
+                  ...laneNodes.map(
+                    (node) => node.row
+                  )
+                )
+              : 0;
+
           return (
             <section
               key={lane.actor}
@@ -702,6 +842,14 @@ const ProcessDiagramPreview = ({
 
               <div className="process-diagram-preview__lane-content">
                 {laneNodes.map((node) => {
+                  /**
+                   * Convert the node's global workflow row into a row relative to this
+                   * lane. CSS Grid uses one-based coordinates, so one is added only
+                   * when the style is applied below.
+                   */
+                  const laneRow =
+                    node.row - firstLaneRow;
+
                   const step = stepById.get(
                     node.stepId
                   );
@@ -709,6 +857,7 @@ const ProcessDiagramPreview = ({
                   if (!step) {
                     return null;
                   }
+
 
                   /**
                    * Look up the highest validation severity associated with this process step
@@ -790,13 +939,14 @@ const ProcessDiagramPreview = ({
                       }
                       data-column={node.column}
                       data-row={node.row}
+                      data-lane-row={laneRow}
                       style={{
                         /**
-                         * Convert zero-based layout coordinates into one-based
-                         * CSS Grid positions.
+                         * Columns remain global so workflow progression stays aligned across actor
+                         * lanes. Rows are normalized per lane to remove unused leading space.
                          */
                         gridColumn: node.column + 1,
-                        gridRow: node.row + 1,
+                        gridRow: laneRow + 1,
                       }}
                     >
                       <span className="process-diagram-preview__node-type">

@@ -4,7 +4,7 @@
 - **Current item:** Add visual connector creation
 - **Last completed item:** Add drag-and-drop step reordering
 - **Backend test status:** 84 passed, 0 failed
-- **Frontend test status:** 92 passed, 0 failed
+- **Frontend test status:** 97 passed, 0 failed
 ## Resume Instructions
 
 1. Read the **Current Status** section.

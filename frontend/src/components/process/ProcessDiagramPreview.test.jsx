@@ -160,6 +160,388 @@ describe("ProcessDiagramPreview", () => {
     ).toBeInTheDocument();
   });
 
+/**
+ * Confirms that multiple branches leaving the same decision node receive
+ * separate horizontal routing channels instead of overlapping one another.
+ */
+test("separates routing channels for sibling decision branches", () => {
+  const originalGetBoundingClientRect =
+    HTMLElement.prototype.getBoundingClientRect;
+
+  /**
+   * JSDOM does not perform visual layout, so provide deterministic geometry for
+   * the rendered diagram surface and its three process nodes.
+   */
+  HTMLElement.prototype.getBoundingClientRect =
+    function getBoundingClientRectMock() {
+      if (
+        this.dataset.testid ===
+        "process-diagram-content"
+      ) {
+        return {
+          left: 0,
+          top: 0,
+          right: 1000,
+          bottom: 600,
+          width: 1000,
+          height: 600,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        };
+      }
+
+      const accessibleName =
+        this.getAttribute("aria-label");
+
+      if (
+        accessibleName ===
+        "Select Is approval required?"
+      ) {
+        return {
+          left: 100,
+          top: 100,
+          right: 300,
+          bottom: 170,
+          width: 200,
+          height: 70,
+          x: 100,
+          y: 100,
+          toJSON: () => {},
+        };
+      }
+
+      if (
+        accessibleName ===
+        "Select Approve request"
+      ) {
+        return {
+          left: 500,
+          top: 80,
+          right: 700,
+          bottom: 150,
+          width: 200,
+          height: 70,
+          x: 500,
+          y: 80,
+          toJSON: () => {},
+        };
+      }
+
+      if (
+        accessibleName ===
+        "Select Reject request"
+      ) {
+        return {
+          left: 500,
+          top: 240,
+          right: 700,
+          bottom: 310,
+          width: 200,
+          height: 70,
+          x: 500,
+          y: 240,
+          toJSON: () => {},
+        };
+      }
+
+      return originalGetBoundingClientRect.call(
+        this
+      );
+    };
+
+  const processModel = {
+    processName: "Approval Decision",
+    actors: [
+      "Requester",
+      "Approver",
+    ],
+    steps: [
+      {
+        id: "step-1",
+        type: "decision",
+        label: "Is approval required?",
+        owner: "Requester",
+        connections: [
+          {
+            targetStepId: "step-2",
+            label: "Yes",
+          },
+          {
+            targetStepId: "step-3",
+            label: "No",
+          },
+        ],
+      },
+      {
+        id: "step-2",
+        type: "process",
+        label: "Approve request",
+        owner: "Approver",
+        connections: [],
+      },
+      {
+        id: "step-3",
+        type: "process",
+        label: "Reject request",
+        owner: "Approver",
+        connections: [],
+      },
+    ],
+  };
+
+  try {
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    const approveConnector =
+      screen.getByTestId(
+        "process-connector-step-1-step-2"
+      );
+
+    const rejectConnector =
+      screen.getByTestId(
+        "process-connector-step-1-step-3"
+      );
+
+    expect(
+      approveConnector.getAttribute("d")
+    ).not.toBe(
+      rejectConnector.getAttribute("d")
+    );
+
+    /**
+     * Each sibling branch should expose its assigned routing-channel index so
+     * the path separation remains deterministic and testable.
+     */
+    expect(approveConnector).toHaveAttribute(
+      "data-route-index",
+      "0"
+    );
+
+    expect(rejectConnector).toHaveAttribute(
+      "data-route-index",
+      "1"
+    );
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect =
+      originalGetBoundingClientRect;
+  }
+});
+
+/**
+ * Confirms that a swimlane uses row positions relative to its own first node.
+ *
+ * A branch may receive a lower global workflow row, but that should not create
+ * empty rows above the first visible node inside a different actor's lane.
+ */
+test("removes unused leading rows from each swimlane", () => {
+  const processModel = {
+    processName: "Approval Routing",
+    actors: [
+      "Requester",
+      "Reviewer",
+    ],
+    steps: [
+      {
+        id: "step-1",
+        type: "decision",
+        label: "Choose review path",
+        owner: "Requester",
+        connections: [
+          {
+            targetStepId: "step-2",
+            label: "Standard",
+          },
+          {
+            targetStepId: "step-3",
+            label: "Escalate",
+          },
+        ],
+      },
+      {
+        id: "step-2",
+        type: "process",
+        label: "Continue standard path",
+        owner: "Requester",
+        connections: [],
+      },
+      {
+        id: "step-3",
+        type: "process",
+        label: "Review escalated request",
+        owner: "Reviewer",
+        connections: [],
+      },
+    ],
+  };
+
+  render(
+    <ProcessDiagramPreview
+      processModel={processModel}
+    />
+  );
+
+  const reviewerNode = screen.getByRole(
+    "button",
+    {
+      name: "Select Review escalated request",
+    }
+  );
+
+  /**
+   * The layout utility assigns this secondary branch global row 1. Because it
+   * is the first occupied row in the Reviewer lane, it should render in that
+   * lane's first CSS Grid row rather than leaving an empty row above it.
+   */
+  expect(reviewerNode).toHaveStyle({
+    gridRow: "1",
+  });
+
+  expect(reviewerNode).toHaveAttribute(
+    "data-row",
+    "1"
+  );
+
+  expect(reviewerNode).toHaveAttribute(
+    "data-lane-row",
+    "0"
+  );
+});
+
+/**
+ * Confirms that a branch label remains near the decision node that created the
+ * connection rather than being placed halfway along a long cross-lane route.
+ */
+test("positions branch labels near their source decision", () => {
+  const originalGetBoundingClientRect =
+    HTMLElement.prototype.getBoundingClientRect;
+
+  /**
+   * JSDOM does not calculate diagram geometry, so provide stable measurements
+   * for one decision and one target located in a lower swimlane.
+   */
+  HTMLElement.prototype.getBoundingClientRect =
+    function getBoundingClientRectMock() {
+      if (
+        this.dataset.testid ===
+        "process-diagram-content"
+      ) {
+        return {
+          left: 0,
+          top: 0,
+          right: 1000,
+          bottom: 700,
+          width: 1000,
+          height: 700,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        };
+      }
+
+      const accessibleName =
+        this.getAttribute("aria-label");
+
+      if (
+        accessibleName ===
+        "Select Is approval required?"
+      ) {
+        return {
+          left: 100,
+          top: 100,
+          right: 300,
+          bottom: 170,
+          width: 200,
+          height: 70,
+          x: 100,
+          y: 100,
+          toJSON: () => {},
+        };
+      }
+
+      if (
+        accessibleName ===
+        "Select Route for review"
+      ) {
+        return {
+          left: 500,
+          top: 500,
+          right: 700,
+          bottom: 570,
+          width: 200,
+          height: 70,
+          x: 500,
+          y: 500,
+          toJSON: () => {},
+        };
+      }
+
+      return originalGetBoundingClientRect.call(
+        this
+      );
+    };
+
+  const processModel = {
+    processName: "Approval Routing",
+    actors: [
+      "Requester",
+      "Reviewer",
+    ],
+    steps: [
+      {
+        id: "step-1",
+        type: "decision",
+        label: "Is approval required?",
+        owner: "Requester",
+        connections: [
+          {
+            targetStepId: "step-2",
+            label: "Yes",
+          },
+        ],
+      },
+      {
+        id: "step-2",
+        type: "process",
+        label: "Route for review",
+        owner: "Reviewer",
+        connections: [],
+      },
+    ],
+  };
+
+  try {
+    render(
+      <ProcessDiagramPreview
+        processModel={processModel}
+      />
+    );
+
+    const branchLabel = screen.getByTestId(
+      "process-connector-label-step-1-step-2"
+    );
+
+    /**
+     * The source node ends at x=300. The label should remain within the short
+     * source-exit area rather than being placed near the route midpoint.
+     */
+    expect(
+      Number(branchLabel.getAttribute("x"))
+    ).toBeLessThanOrEqual(360);
+
+    expect(
+      Number(branchLabel.getAttribute("y"))
+    ).toBeLessThanOrEqual(150);
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect =
+      originalGetBoundingClientRect;
+  }
+});
+
   /**
    * Confirms that a labeled process connection displays its branch text in the
    * diagram preview so decision outcomes remain understandable.
@@ -687,6 +1069,108 @@ describe("ProcessDiagramPreview", () => {
       screen.getByText("50%")
     ).toBeInTheDocument();
   });
+
+/**
+ * Confirms that fitting centers the diagram along an axis where the scaled
+ * workflow is smaller than the available viewport.
+ */
+test("centers fitted diagram content within the viewport", async () => {
+  const user = userEvent.setup();
+
+  const processModel = {
+    processName: "Approval Flow",
+    actors: [
+      "Requester",
+      "Approver",
+    ],
+    steps: [
+      {
+        id: "step-1",
+        type: "start",
+        name: "Submit request",
+        owner: "Requester",
+        connections: [
+          {
+            targetStepId: "step-2",
+            label: "",
+          },
+        ],
+      },
+      {
+        id: "step-2",
+        type: "end",
+        name: "Approve request",
+        owner: "Approver",
+        connections: [],
+      },
+    ],
+  };
+
+  render(
+    <ProcessDiagramPreview
+      processModel={processModel}
+    />
+  );
+
+  const diagramViewport = screen.getByTestId(
+    "process-diagram-viewport"
+  );
+
+  const diagramContent = screen.getByTestId(
+    "process-diagram-content"
+  );
+
+  Object.defineProperty(
+    diagramViewport,
+    "clientWidth",
+    {
+      configurable: true,
+      value: 800,
+    }
+  );
+
+  Object.defineProperty(
+    diagramViewport,
+    "clientHeight",
+    {
+      configurable: true,
+      value: 400,
+    }
+  );
+
+  Object.defineProperty(
+    diagramContent,
+    "scrollWidth",
+    {
+      configurable: true,
+      value: 1200,
+    }
+  );
+
+  Object.defineProperty(
+    diagramContent,
+    "scrollHeight",
+    {
+      configurable: true,
+      value: 800,
+    }
+  );
+
+  await user.click(
+    screen.getByRole("button", {
+      name: "Fit diagram to screen",
+    })
+  );
+
+  /**
+   * Height determines the 50% scale. The resulting 600-pixel diagram width is
+   * centered inside the 800-pixel viewport with 100 pixels on each side.
+   */
+  expect(diagramContent).toHaveStyle({
+    transform:
+      "translate(100px, 0px) scale(0.5)",
+  });
+});
 
   /**
    * Confirms that large workflows provide accessible directional controls for
